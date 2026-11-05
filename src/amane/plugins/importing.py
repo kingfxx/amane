@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from ..config import HotSettings, PluginConfig
+from ..utils.path import resolved_path
 from ..utils.threads import in_thread
 from .api import ImportProvider
 from .import_models import ImportCandidate
@@ -21,11 +22,13 @@ def import_provider(manager: PluginManager, hot: HotSettings, source_id: str) ->
 
 
 def _checked(path: Path, root: Path, safe_dirs: Sequence[Path] | None) -> Path:
-    resolved = path.resolve(strict=True)
-    if not resolved.is_relative_to(root.resolve()):
+    resolved = resolved_path(path)
+    if not resolved.is_relative_to(resolved_path(root)):
         raise PermissionError("导入文件超出所选目录")
-    if safe_dirs is not None and not any(resolved.is_relative_to(directory.resolve()) for directory in safe_dirs):
+    if safe_dirs is not None and not any(resolved.is_relative_to(resolved_path(directory)) for directory in safe_dirs):
         raise PermissionError("导入文件不在允许的安全目录内")
+    # 虚拟卷可能只拒绝严格规范化; 存在性仍须独立验证, 不能随路径回退而省略.
+    resolved.stat()
     return resolved
 
 

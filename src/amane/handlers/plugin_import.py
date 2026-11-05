@@ -11,7 +11,7 @@ from ..library import has_companion_subtitle
 from ..media import ResourceStore
 from ..plugins.importing import import_provider, read_import
 from ..plugins.manager import PluginManager
-from ..utils.path import nfc_path
+from ..utils.path import nfc_path, resolved_path
 from ..utils.threads import in_thread
 from .models import PluginImportPayload, PluginImportResult
 from .protocol import TaskHandler, TaskResult
@@ -19,8 +19,8 @@ from .protocol import TaskHandler, TaskResult
 
 @in_thread
 def _media_path(path: str, library_path: str) -> tuple[str, int]:
-    candidate = Path(path).resolve(strict=True)
-    if not candidate.is_relative_to(Path(library_path).resolve()) or not candidate.is_file():
+    candidate = resolved_path(path)
+    if not candidate.is_relative_to(resolved_path(library_path)) or not candidate.is_file():
         raise ValueError("关联正片不在所选媒体库内或不是文件")
     return nfc_path(str(candidate)), candidate.stat().st_size
 

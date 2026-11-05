@@ -6,10 +6,10 @@ from PIL import Image
 from amane.config import HotSettings
 from amane.db.repository import Repository
 from amane.enums import MetadataField
-from amane.handlers.plugin_import import PluginImportHandler, PluginImportPayload
+from amane.handlers.plugin_import import PluginImportHandler, PluginImportPayload, _media_path
 from amane.media import ResourceStore
 from amane.plugin import ImportPlugin, ImportProvider
-from amane.plugins.importing import read_import
+from amane.plugins.importing import discover_imports, read_import
 from amane.plugins.manager import PluginManager
 from amane.plugins.packaging import load_plugin
 
@@ -72,6 +72,36 @@ def test_nfo_bare_ampersands_preserve_source_and_cdata(nfo_provider: ImportProvi
     artwork = artwork_candidate.metadata
     assert artwork.poster_urls == ["https://example.test/poster.jpg"]
     assert artwork.extrafanart == ["https://example.test/still.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_virtual_volume_import_checks(
+    nfo_provider: ImportProvider, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "JUR-840.nfo"
+    source.write_text("<movie><num>JUR-840</num></movie>", encoding="utf-8")
+    media = tmp_path / "JUR-840.mp4"
+    media.write_bytes(b"video")
+    original_resolve = Path.resolve
+
+    def reject_strict(path: Path, strict: bool = False) -> Path:
+        if strict:
+            raise OSError(22, "虚拟卷不支持严格规范化 (WinError 1005)", str(path))
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", reject_strict)
+    assert await discover_imports(nfo_provider, tmp_path, False, [tmp_path]) == (source,)
+    assert (await read_import(nfo_provider, source, tmp_path, [tmp_path])).media_paths == [str(media)]
+    assert await _media_path(str(media), str(tmp_path)) == (str(media), 5)
+    for path, roots, error, message in (
+        (source, [tmp_path / "other"], PermissionError, "安全目录"),
+        (tmp_path / ".." / "outside.nfo", [tmp_path], PermissionError, "超出"),
+        (tmp_path / "missing.nfo", [tmp_path], FileNotFoundError, "missing.nfo"),
+    ):
+        with pytest.raises(error, match=message):
+            await read_import(nfo_provider, path, tmp_path, roots)
+    with pytest.raises(ValueError, match="所选媒体库"):
+        await _media_path(str(media), str(tmp_path / "other"))
 
 
 @pytest.mark.asyncio
