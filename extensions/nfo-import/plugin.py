@@ -39,7 +39,7 @@ def _parse_xml(data: bytes) -> tuple[ET.Element, list[str]]:
     try:
         return parse(data), []
     except ET.ParseError, expat.ExpatError:
-        # 部分 NFO 的网址未转义 &; 只修复裸字符, 保留 CDATA 与注释正文.
+        # 仅修复裸 & 与数字开头的自定义标签名; CDATA、注释和源文件保持不变.
         encoding = "utf-8-sig"
         declaration = re.search(rb"encoding=[\"\']([^\"\']+)", data[:256], re.IGNORECASE)
         if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
@@ -48,15 +48,28 @@ def _parse_xml(data: bytes) -> tuple[ET.Element, list[str]]:
             encoding = declaration[1].decode("ascii")
         try:
             text = data.decode(encoding)
-            repaired = "".join(
-                part
-                if part.startswith(("<![CDATA[", "<!--"))
-                else re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9A-Fa-f]+;)", "&amp;", part)
-                for part in re.split(r"(<!\[CDATA\[.*?\]\]>|<!--.*?-->)", text, flags=re.DOTALL)
-            )
+            parts: list[str] = []
+            repaired_ampersands = False
+            repaired_tags = False
+            for part in re.split(r"(<!\[CDATA\[.*?\]\]>|<!--.*?-->)", text, flags=re.DOTALL):
+                if part.startswith(("<![CDATA[", "<!--")):
+                    parts.append(part)
+                    continue
+                escaped = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9A-Fa-f]+;)", "&amp;", part)
+                normalized = re.sub(r"(</?)([0-9][A-Za-z0-9_.-]*)(?=[\s/>])", r"\1_\2", escaped)
+                repaired_ampersands |= escaped != part
+                repaired_tags |= normalized != escaped
+                parts.append(normalized)
+            repaired = "".join(parts)
             if repaired == text:
                 raise ValueError("NFO XML 格式无效")
-            return parse(repaired.encode(encoding)), ["NFO 存在未转义的 & 字符, 已在内存中修复, 源文件保持不变"]
+            root = parse(repaired.encode(encoding))
+            warnings: list[str] = []
+            if repaired_ampersands:
+                warnings.append("NFO 存在未转义的 & 字符, 已在内存中修复, 源文件保持不变")
+            if repaired_tags:
+                warnings.append("NFO 自定义标签名以数字开头, 已兼容读取, 源文件保持不变")
+            return root, warnings
         except (UnicodeError, LookupError, ET.ParseError, expat.ExpatError) as exc:
             raise ValueError("NFO XML 格式无效") from exc
 
@@ -259,7 +272,7 @@ class Plugin(ImportPlugin):
         return SourceDescriptor(
             id="local.nfo",
             name="本地 NFO 导入",
-            version="0.1.0",
+            version="0.1.1",
             capabilities=frozenset({SourceCapability.METADATA_IMPORT}),
         )
 

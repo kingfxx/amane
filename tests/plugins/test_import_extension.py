@@ -74,6 +74,42 @@ def test_nfo_bare_ampersands_preserve_source_and_cdata(nfo_provider: ImportProvi
     assert artwork.extrafanart == ["https://example.test/still.jpg"]
 
 
+def test_nfo_numeric_tag_compatibility(nfo_provider: ImportProvider, tmp_path: Path) -> None:
+    path = tmp_path / "JUR-638.nfo"
+    literal = "<7mmtvid>原文 & 内容</7mmtvid>"
+    cases = [
+        ("<7mmtvid>https://example.test/movie</7mmtvid>", 1, None),
+        ('<7mmtvid type="source"/>', 1, None),
+        ("<7mmtvid>https://example.test/?a=1&b=2</7mmtvid>", 2, None),
+        ("<!-- <7mmtvid>原文</7mmtvid> -->", 0, None),
+        ("<7mmtvid>地址</7other>", 0, "XML 格式"),
+        ("<7mmtvid>地址", 0, "XML 格式"),
+        ("<7mmtv!>地址</7mmtv!>", 0, "XML 格式"),
+    ]
+    for encoding in ("utf-8", "utf-16"):
+        for extra, warnings, error in cases:
+            xml = (
+                f"<movie><num>JUR-638</num><title>JUR-638 标题</title><plot><![CDATA[{literal}]]></plot>{extra}</movie>"
+            )
+            path.write_text(xml, encoding=encoding)
+            before = path.read_bytes()
+            if error:
+                with pytest.raises(ValueError, match=error):
+                    nfo_provider.read(path)
+            else:
+                candidate = nfo_provider.read(path)
+                assert candidate.metadata.number == "JUR-638" and candidate.metadata.title == "标题"
+                assert candidate.metadata.plot == literal
+                assert len(candidate.warnings) == warnings
+            assert path.read_bytes() == before
+        path.write_text(
+            '<!DOCTYPE movie [<!ENTITY x SYSTEM "file:///secret">]><movie><7mmtvid>&x;</7mmtvid></movie>',
+            encoding=encoding,
+        )
+        with pytest.raises(ValueError, match="DTD"):
+            nfo_provider.read(path)
+
+
 @pytest.mark.asyncio
 async def test_virtual_volume_import_checks(
     nfo_provider: ImportProvider, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
