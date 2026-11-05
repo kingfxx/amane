@@ -1,6 +1,20 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { candidates, masterUrl, parsePage } = require("./amane-115.user.js");
+const { metadataNumber, candidates, masterUrl, parsePage } = require("./amane-115.user.js");
+
+test("从 Amane 详情响应读取嵌套番号并区分非法内容", () => {
+  assert.equal(metadataNumber({ metadata: { id: 9, number: " jur-840 " }, files: [] }), "JUR-840");
+  for (const body of [
+    null,
+    {},
+    { number: "JUR-840" },
+    { metadata: null },
+    { metadata: { number: " " } },
+    { metadata: { number: 840 } },
+  ]) {
+    assert.throws(() => metadataNumber(body), /没有可用番号/);
+  }
+});
 
 test("番号边界、分隔符、视频类型与候选去重", () => {
   const rows = [

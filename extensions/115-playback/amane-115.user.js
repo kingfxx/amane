@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amane 115 播放
 // @namespace    amane-local-extensions
-// @version      0.1.0
+// @version      0.1.1
 // @description  按番号搜索已登录的 115 文件, 点击后打开 115master
 // @match        http://localhost:8000/*
 // @match        http://127.0.0.1:8000/*
@@ -13,6 +13,12 @@
 
 (() => {
   "use strict";
+
+  function metadataNumber(detail) {
+    const number = detail?.metadata?.number;
+    if (typeof number !== "string" || !number.trim()) throw new Error("影片没有可用番号");
+    return number.trim().toUpperCase();
+  }
 
   function numberPattern(number) {
     const fc2 = /^FC2[-_\s]*(?:PPV[-_\s]*)?(\d+)$/i.exec(number.trim());
@@ -82,7 +88,14 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { numberPattern, searchTerms, candidates, masterUrl, parsePage };
+    module.exports = {
+      metadataNumber,
+      numberPattern,
+      searchTerms,
+      candidates,
+      masterUrl,
+      parsePage,
+    };
     return;
   }
 
@@ -210,10 +223,7 @@
             signal: controller.signal,
           });
           if (!response.ok) throw new Error(`无法读取影片信息 (${response.status})`);
-          const metadata = await response.json();
-          if (typeof metadata.number !== "string" || !metadata.number.trim())
-            throw new Error("影片没有可用番号");
-          number = metadata.number.trim().toUpperCase();
+          number = metadataNumber(await response.json());
         }
         if (run !== generation) return;
         const found = await search(number, run);
