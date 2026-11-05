@@ -467,6 +467,10 @@
       },
       "library_id": {
         "label": "Associated library"
+      },
+      "overwrite_existing": {
+        "label": "Overwrite existing unlocked fields",
+        "description": "Only non-empty imported values replace existing values. Locked fields and fields missing from the import are preserved."
       }
     }
   },

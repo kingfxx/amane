@@ -2,9 +2,11 @@
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 from ..config import HotSettings
 from ..db.models import ImportRecord, MediaFile, MediaFileStatus
+from ..db.repo_types import MetadataFields
 from ..db.repository import Repository
 from ..enums import MetadataField
 from ..library import has_companion_subtitle
@@ -78,29 +80,36 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
         for key, kind in (("poster_urls", "poster"), ("thumb_urls", "thumb"), ("extrafanart", "still")):
             if images[kind]:
                 sources[key] = payload.source_id
-        meta = await self._repo.upsert_metadata(
-            number=data.number,
-            fill_only=True,
-            merge_raw=True,
-            title=data.title,
-            actors=[actor.name for actor in data.actors],
-            studio=data.studio,
-            publisher=data.publisher,
-            release=data.release,
-            runtime=data.runtime,
-            tags=data.tags,
-            series=data.series,
-            plot=data.plot,
-            directors=data.directors,
-            poster_urls=list(dict.fromkeys([*images["poster"], *data.poster_urls])),
-            thumb_urls=list(dict.fromkeys([*images["thumb"], *data.thumb_urls])),
-            trailer_urls=data.trailer_urls,
-            extrafanart_urls={payload.source_id: [*images["still"], *data.extrafanart]}
+        fields: MetadataFields = {
+            "title": data.title,
+            "actors": [actor.name for actor in data.actors],
+            "studio": data.studio,
+            "publisher": data.publisher,
+            "release": data.release,
+            "runtime": data.runtime,
+            "tags": data.tags,
+            "series": data.series,
+            "plot": data.plot,
+            "directors": data.directors,
+            "poster_urls": list(dict.fromkeys([*images["poster"], *data.poster_urls])),
+            "thumb_urls": list(dict.fromkeys([*images["thumb"], *data.thumb_urls])),
+            "trailer_urls": data.trailer_urls,
+            "extrafanart_urls": {payload.source_id: [*images["still"], *data.extrafanart]}
             if images["still"] or data.extrafanart
             else {},
-            scores={payload.source_id: data.score} if data.score is not None else {},
-            raw={payload.source_id: data.model_dump(mode="json")},
-            field_sources=sources,
+            "scores": {payload.source_id: data.score} if data.score is not None else {},
+            "raw": {payload.source_id: data.model_dump(mode="json")},
+            "field_sources": sources,
+        }
+        if payload.overwrite_existing:
+            fields = cast(
+                "MetadataFields", {key: value for key, value in fields.items() if value not in (None, "", [], {})}
+            )
+        meta = await self._repo.upsert_metadata(
+            number=data.number,
+            fill_only=not payload.overwrite_existing,
+            merge_raw=True,
+            **fields,
             import_record=ImportRecord(
                 metadata_id=0,
                 source_id=payload.source_id,

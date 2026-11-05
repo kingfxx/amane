@@ -30,6 +30,7 @@ export function ImportPanel({
   const { t } = useTranslation("plugins");
   const [path, setPath] = useState("");
   const [recursive, setRecursive] = useState(false);
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [library, setLibrary] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
@@ -64,6 +65,7 @@ export function ImportPanel({
                 source_path: item.candidate.source_path,
                 source_hash: item.candidate.source_hash,
                 library_id: library ? Number(library) : null,
+                overwrite_existing: overwriteExisting,
               },
             ];
           }),
@@ -115,6 +117,13 @@ export function ImportPanel({
             reset();
           }}
           label={t("import.recursive")}
+          disabled={pending}
+        />
+        <Checkbox
+          checked={overwriteExisting}
+          onChange={(event) => setOverwriteExisting(event.currentTarget.checked)}
+          label={t("import.overwriteExisting")}
+          description={t("import.overwriteHint")}
           disabled={pending}
         />
         <Select
@@ -173,7 +182,7 @@ export function ImportPanel({
                   ) : null}
                   {item.existing_metadata_id ? (
                     <Text size="xs" c="orange">
-                      {t("import.fillOnly")}
+                      {overwriteExisting ? t("import.overwriteNotice") : t("import.fillOnly")}
                     </Text>
                   ) : null}
                   {item.candidate ? (

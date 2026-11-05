@@ -29,6 +29,7 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
                 "root": str(directory),
                 "source_path": str(source),
                 "source_hash": candidate["source_hash"],
+                "overwrite_existing": True,
             }
         ]
     }
@@ -42,6 +43,7 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
                 break
             await asyncio.sleep(0.05)
     assert task["status"] == "done", task
+    assert task["payload"]["overwrite_existing"] is True
     metadata_id = task["result"]["metadata_id"]
     records = await client.get(f"imports/{metadata_id}/records")
     assert records.status_code == 200 and records.json()[0]["source_path"] == str(source.resolve())
@@ -49,5 +51,8 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     assert (await client.post("imports/execute", json=body)).status_code == 409
     assert (await client.post("imports/preview", json={**request, "path": str(tmp_path)})).status_code == 403
     assert (await client.post("imports/execute", json={"items": []})).status_code == 422
+    assert (
+        await client.post("imports/execute", json={"items": [{**body["items"][0], "overwrite_existing": "invalid"}]})
+    ).status_code == 422
     assert (await client.patch("plugins/local.nfo", json={"enabled": False})).status_code == 200
     assert (await client.post("imports/preview", json=request)).status_code == 422

@@ -141,6 +141,57 @@ async def test_virtual_volume_import_checks(
 
 
 @pytest.mark.asyncio
+async def test_import_overwrite_respects_locks_and_missing_fields(
+    repo: Repository, resource_store: ResourceStore, tmp_path: Path
+) -> None:
+    loaded = load_plugin("local.nfo", Path(__file__).resolve().parents[2] / "extensions/nfo-import")
+    assert isinstance(loaded.plugin, ImportPlugin)
+    provider = loaded.plugin.build_importer(loaded.plugin.configuration_model()())
+    manager = PluginManager({"local.nfo": loaded.plugin}, [])
+    handler = PluginImportHandler(repo, resource_store, manager, HotSettings(), [tmp_path])
+    for overwrite, number in ((False, "JUR-638"), (True, "JUR-673")):
+        source = tmp_path / f"{number}.nfo"
+        source.write_text(
+            f"<movie><num>{number}</num><title>新标题</title><plot>新剧情</plot><runtime>0</runtime><rating>0</rating><tag>新标签</tag><cover>https://example.test/new.jpg</cover></movie>",
+            encoding="utf-8",
+        )
+        existing = await repo.upsert_metadata(
+            number,
+            title="原标题",
+            plot="锁定剧情",
+            runtime=120,
+            tags=["原标签"],
+            publisher="保留制作商",
+            actors=["保留演员"],
+            scores={"javdb": 8.0},
+            field_sources={"title": "javdb", "plot": "javdb", "publisher": "javdb", "actors": "javdb"},
+        )
+        assert existing.id is not None
+        await repo.set_metadata_locks(existing.id, [MetadataField.PLOT, MetadataField.THUMB_URLS])
+        candidate = provider.read(source)
+        result = await handler.handle(
+            PluginImportPayload(
+                source_id="local.nfo",
+                root=str(tmp_path),
+                source_path=str(source),
+                source_hash=candidate.source_hash,
+                overwrite_existing=overwrite,
+            )
+        )
+        assert result.success
+        meta = await repo.get_metadata(existing.id)
+        assert meta is not None
+        assert meta.title == ("新标题" if overwrite else "原标题")
+        assert meta.runtime == (0 if overwrite else 120)
+        assert meta.tags == (["新标签"] if overwrite else ["原标签"])
+        assert meta.scores == ({"local.nfo": 0} if overwrite else {"javdb": 8.0})
+        assert meta.plot == "锁定剧情" and meta.thumb_urls == []
+        assert meta.publisher == "保留制作商" and meta.actors == ["保留演员"]
+        assert meta.field_sources["title"] == ("local.nfo" if overwrite else "javdb")
+        assert meta.field_sources["publisher"] == "javdb" and meta.field_sources["plot"] == "javdb"
+
+
+@pytest.mark.asyncio
 async def test_import_preserves_fields_paths_and_source_files(
     nfo_provider: ImportProvider, repo: Repository, resource_store: ResourceStore, tmp_path: Path
 ) -> None:

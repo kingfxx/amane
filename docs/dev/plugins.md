@@ -7,7 +7,7 @@
 
 插件 API v1 开放**影片元数据来源**、**播放源**与**元数据导入**. 共用 `{cold.data_dir}/plugins/sources/<id>/` 与 HotSettings `plugins.<id>` 信封; 调用路径与输入输出分离. 插件不直接访问 Repository、任务 Worker、FastAPI 或前端运行时.
 
-导入采用独立契约 v1 (`ImportPlugin.import_api_version`), 不改变既有来源 API; 安装校验共用 `plugins/packaging.py::_require_matching_capabilities`. `plugins/importing.py` 在线程池读取候选; 候选与正片路径统一经 `utils/path.py::resolved_path` 兼容虚拟卷规范化, 存在性与目录边界仍须独立校验. `handlers/plugin_import.py::PluginImportHandler` 重新校验预览散列, 按来源文件独立提交任务. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一写事务中补充未锁定空字段、登记正片和导入记录; `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须同时处理其归属. 图片按内容复制, 预告片保留远程链接, 本地预览片只记录路径. 导入禁止派生刮削与整理任务; 格式规则只在独立插件中实现.
+导入采用独立契约 v1 (`ImportPlugin.import_api_version`), 不改变既有来源 API; 安装校验共用 `plugins/packaging.py::_require_matching_capabilities`. `plugins/importing.py` 在线程池读取候选; 候选与正片路径统一经 `utils/path.py::resolved_path` 兼容虚拟卷规范化, 存在性与目录边界独立校验. `handlers/plugin_import.py::PluginImportHandler` 重新校验预览散列, 按来源文件提交任务. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一写事务中写入字段、正片关联与导入记录; 默认补充空字段, 显式覆盖只写非空导入值, 两者均遵守字段锁并保留未改字段的来源. `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须同时处理其归属. 图片按内容复制, 预告片保留远程链接, 本地预览片只记录路径. 导入禁止派生刮削与整理任务; 格式规则只在独立插件中实现.
 
 影片来源通过一个窄接口接收 `SearchQuery` 并返回 `MediaMetadata`, 随后进入现有聚合 DAG. `MediaMetadata.actors` 为 `list[FilmActor]`, 也接受 `list[str]` (性别 `unknown`), API 版本号不因此递增; 性别契约见 [crawlers.md](crawlers.md).
 

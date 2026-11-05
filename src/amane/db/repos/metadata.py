@@ -409,6 +409,7 @@ class MetadataRepoMixin(RepositoryMixinBase):
                             if key in {"raw", "field_sources"} or snapshot.get(key) in (None, "", [], {})
                         },
                     )
+                if fill_only or import_record is not None:
                     sources = fields.get("field_sources", {})
                     fields["field_sources"] = {
                         **(existing.field_sources or {}),

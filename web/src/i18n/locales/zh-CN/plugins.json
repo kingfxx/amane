@@ -44,6 +44,9 @@
     "remoteTrailer": "远程预告片: {{path}}",
     "localTrailer": "本地预览片 (只保存路径): {{path}}",
     "submitted": "已提交 {{count}} 个导入任务, 请在任务页查看结果.",
-    "execute": "导入选中影片 ({{count}})"
+    "execute": "导入选中影片 ({{count}})",
+    "overwriteExisting": "覆盖未锁定的已有字段",
+    "overwriteHint": "仅使用导入的非空值覆盖; 锁定字段保持不变, 缺失字段不清空已有值.",
+    "overwriteNotice": "影片已存在, 将覆盖未锁定且有导入值的字段"
   }
 }

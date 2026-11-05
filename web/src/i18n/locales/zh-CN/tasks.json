@@ -436,6 +436,10 @@
       },
       "library_id": {
         "label": "关联媒体库"
+      },
+      "overwrite_existing": {
+        "label": "覆盖未锁定的已有字段",
+        "description": "仅使用导入的非空值覆盖; 锁定字段保持不变, 缺失字段不清空已有值."
       }
     }
   },

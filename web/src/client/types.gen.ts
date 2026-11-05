@@ -3715,6 +3715,12 @@ export type PluginImportPayload = {
      * Library Id
      */
     library_id?: number | null;
+    /**
+     * Overwrite Existing
+     *
+     * 使用导入的非空值覆盖未锁定字段; 缺失字段不清空已有值
+     */
+    overwrite_existing?: boolean;
 };
 
 /**
@@ -3763,6 +3769,12 @@ export type PluginImportSubmission = {
      * Library Id
      */
     library_id?: number | null;
+    /**
+     * Overwrite Existing
+     *
+     * 使用导入的非空值覆盖未锁定字段; 缺失字段不清空已有值
+     */
+    overwrite_existing?: boolean;
     /**
      * Type
      */

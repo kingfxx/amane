@@ -7212,6 +7212,12 @@ export const PluginImportPayloadSchema = {
                 }
             ],
             title: 'Library Id'
+        },
+        overwrite_existing: {
+            type: 'boolean',
+            title: 'Overwrite Existing',
+            description: '使用导入的非空值覆盖未锁定字段; 缺失字段不清空已有值',
+            default: false
         }
     },
     type: 'object',
@@ -7286,6 +7292,12 @@ export const PluginImportSubmissionSchema = {
                 }
             ],
             title: 'Library Id'
+        },
+        overwrite_existing: {
+            type: 'boolean',
+            title: 'Overwrite Existing',
+            description: '使用导入的非空值覆盖未锁定字段; 缺失字段不清空已有值',
+            default: false
         },
         type: {
             type: 'string',

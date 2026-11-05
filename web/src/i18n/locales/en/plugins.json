@@ -46,6 +46,9 @@
     "submitted_one": "Submitted {{count}} import tasks. Check the Tasks page for results.",
     "submitted_other": "Submitted {{count}} import tasks. Check the Tasks page for results.",
     "execute_one": "Import selected movies ({{count}})",
-    "execute_other": "Import selected movies ({{count}})"
+    "execute_other": "Import selected movies ({{count}})",
+    "overwriteExisting": "Overwrite existing unlocked fields",
+    "overwriteHint": "Only non-empty imported values replace existing values. Locked fields and fields missing from the import are preserved.",
+    "overwriteNotice": "Existing movie: unlocked fields with imported values will be overwritten"
   }
 }
