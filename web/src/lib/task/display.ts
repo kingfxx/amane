@@ -34,6 +34,7 @@ export const TASK_ICONS: Record<TaskType, Icon> = exhaustiveRecord<TaskType>()({
   scrape: IconSearch,
   upscale: IconArrowsDiagonal,
   r18_import: IconDatabase,
+  plugin_import: IconDatabase,
   actor_scrape: IconUser,
   rescrape: IconRepeat,
   scan_invalid: IconZoomExclamation,

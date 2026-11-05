@@ -25,6 +25,27 @@
     "film_metadata": "Film metadata",
     "playback": "Playback",
     "actor_profile": "Actor profile",
-    "actor_image": "Actor image"
+    "actor_image": "Actor image",
+    "metadata_import": "Metadata import"
+  },
+  "import": {
+    "title": "Import local metadata",
+    "hint": "Images are copied to Amane. Remote trailer links are preserved; local trailer paths are recorded without copying. Only empty, unlocked fields are filled. No scraping or organizing is started.",
+    "path": "Server directory",
+    "recursive": "Include subdirectories",
+    "library": "Library for associated videos (optional)",
+    "libraryHint": "Without a library, import metadata and companion resources only.",
+    "preview": "Preview import",
+    "previewRequired": "Preview the import first",
+    "failed": "Import request failed",
+    "empty": "No importable files found",
+    "fillOnly": "Existing movie: only empty, unlocked fields are filled",
+    "counts": "{{images}} images · {{files}} videos",
+    "remoteTrailer": "Remote trailer: {{path}}",
+    "localTrailer": "Local trailer (path only): {{path}}",
+    "submitted_one": "Submitted {{count}} import tasks. Check the Tasks page for results.",
+    "submitted_other": "Submitted {{count}} import tasks. Check the Tasks page for results.",
+    "execute_one": "Import selected movies ({{count}})",
+    "execute_other": "Import selected movies ({{count}})"
   }
 }

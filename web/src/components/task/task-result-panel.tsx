@@ -33,6 +33,17 @@ export function TaskResultPanel({ result, headline, failed }: TaskResultPanelPro
 /** 结果成员 → 面板分支: 新增成员时 `assertNever` 处编译报错. */
 function resultBranch(result: TaskResult, failed: boolean): ReactNode {
   switch (result.type) {
+    case "plugin_import":
+      return (
+        <Stack gap="xs">
+          <MetadataLink metadataId={result.metadata_id} />
+          {result.local_trailer_paths.map((path) => (
+            <Text size="xs" key={path} style={{ overflowWrap: "anywhere" }}>
+              {path}
+            </Text>
+          ))}
+        </Stack>
+      );
     case "scrape": {
       const outcomes = result.outcomes ?? [];
       // 结果里的 id 可能是手写或坏行留下的 0 / 负数, 只给正数渲染链接.

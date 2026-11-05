@@ -13,6 +13,8 @@ from ..crawlers.site_roles import FILM_METADATA_SITES, builtin_descriptors
 from .api import (
     FilmSourcePlugin,
     FilmSourceProvider,
+    ImportPlugin,
+    ImportProvider,
     InstalledPlugin,
     PlaybackPlugin,
     PlaybackProvider,
@@ -243,6 +245,15 @@ class PluginManager:
                 continue
             if config.enabled:
                 self.validate_plugin_config(plugin_id, config)
+
+    def build_import_provider(self, plugin_id: str, config: PluginConfig) -> ImportProvider:
+        plugin = self._plugins.get(plugin_id)
+        if not isinstance(plugin, ImportPlugin):
+            raise ValueError("插件不提供导入能力")
+        provider = plugin.build_importer(self.validate_plugin_config(plugin_id, config))
+        if not isinstance(provider, ImportProvider):
+            raise TypeError("build_importer must return an ImportProvider")
+        return provider
 
     @staticmethod
     def _descriptor_for_route(

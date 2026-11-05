@@ -11,12 +11,14 @@ import mimetypes
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import StrEnum
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 from uuid import uuid4
 
 import structlog
+from PIL import Image
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -283,6 +285,44 @@ class ResourceStore:
     @staticmethod
     def url_hash(url: str) -> str:
         return _url_hash(url)
+
+    async def import_image(self, path: Path) -> str:
+        """复制已授权的本地图片, 以内容地址去重; 路径授权由导入主机校验."""
+
+        def read_image() -> tuple[bytes, str]:
+            with path.open("rb") as stream:
+                data = stream.read(32 * 1024 * 1024 + 1)
+            if len(data) > 32 * 1024 * 1024:
+                raise ValueError("导入图片超过 32 MiB")
+            with Image.open(BytesIO(data)) as image:
+                ext = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}.get(image.format or "")
+                if ext is None:
+                    raise ValueError("导入图片只支持 JPEG、PNG、WebP")
+                image.verify()
+            return data, ext
+
+        data, ext = await asyncio.to_thread(read_image)
+        digest = hashlib.sha256(data).hexdigest()
+        locator = f"local:{digest}{ext}"
+        async with self._serialized(locator):
+            if await self.resolve(locator) is None:
+                dest = self._compute_path(locator, ext=ext)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                tmp = dest.with_name(f"{dest.name}.{uuid4().hex}.part")
+                try:
+                    await asyncio.to_thread(tmp.write_bytes, data)
+                    tmp.replace(dest)
+                finally:
+                    tmp.unlink(missing_ok=True)
+                async with self._session() as session:
+                    existing = (await session.exec(select(Resource).where(Resource.url == locator))).first()
+                    record = existing or Resource(url=locator, file_path=self._relative_path(dest))
+                    record.content_hash = digest
+                    record.size = len(data)
+                    record.mime_type = mimetypes.guess_type(str(dest))[0]
+                    session.add(record)
+                    await session.commit()
+        return f"{RESOURCE_URL_PREFIX}/{self.url_hash(locator)}"
 
     async def acquire_derived(
         self,

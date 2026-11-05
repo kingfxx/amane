@@ -19,6 +19,7 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 from ..net.connectivity import ConnectivityOutcome
 from ..net.errors import FailureReason, SourceError
 from ..parsing.file_info import ContentType, Mosaic
+from .import_models import ImportCandidate
 from .models import PluginConfig, SourceDescriptor
 
 if TYPE_CHECKING:
@@ -372,4 +373,23 @@ class PlaybackPlugin(_ConfiguredPlugin):
         ...
 
 
-InstalledPlugin = FilmSourcePlugin | PlaybackPlugin
+class ImportProvider(ABC):
+    """同步钩子由主机在线程池调用; 只读取用户授权目录, 不写入文件或数据库."""
+
+    @abstractmethod
+    def discover(self, root: Path, *, recursive: bool) -> tuple[Path, ...]: ...
+
+    @abstractmethod
+    def read(self, path: Path) -> ImportCandidate: ...
+
+
+class ImportPlugin(_ConfiguredPlugin):
+    """通用导入契约 v1; 与现有来源 API v1 并存, 不改变已有插件接口."""
+
+    import_api_version: ClassVar[int] = 1
+
+    @abstractmethod
+    def build_importer(self, config: BaseModel) -> ImportProvider: ...
+
+
+InstalledPlugin = FilmSourcePlugin | PlaybackPlugin | ImportPlugin

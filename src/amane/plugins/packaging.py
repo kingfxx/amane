@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from .api import FilmSourcePlugin, InstalledPlugin, PlaybackPlugin
+from .api import FilmSourcePlugin, ImportPlugin, InstalledPlugin, PlaybackPlugin
 from .models import PLUGIN_API_VERSION, SourceCapability, SourceDescriptor, validate_external_source_id
 
 PLUGIN_ENTRY = "plugin.py"
@@ -183,15 +183,13 @@ def uninstall_plugin_tree(data_dir: Path, plugin_id: str) -> None:
 
 
 def _instantiate_plugin(candidate: object) -> InstalledPlugin:
-    if not isinstance(candidate, type) or not (
-        issubclass(candidate, FilmSourcePlugin) or issubclass(candidate, PlaybackPlugin)
-    ):
+    if not isinstance(candidate, type) or not (issubclass(candidate, FilmSourcePlugin | PlaybackPlugin | ImportPlugin)):
         raise TypeError(
-            f"{PLUGIN_ENTRY} must define a FilmSourcePlugin or PlaybackPlugin subclass named {PLUGIN_CLASS_NAME}"
+            f"{PLUGIN_ENTRY} must define a FilmSourcePlugin, PlaybackPlugin or ImportPlugin subclass named {PLUGIN_CLASS_NAME}"
         )
     plugin = candidate()
-    if not isinstance(plugin, FilmSourcePlugin | PlaybackPlugin):
-        raise TypeError(f"{PLUGIN_CLASS_NAME} must be a FilmSourcePlugin or PlaybackPlugin")
+    if not isinstance(plugin, FilmSourcePlugin | PlaybackPlugin | ImportPlugin):
+        raise TypeError(f"{PLUGIN_CLASS_NAME} must be a FilmSourcePlugin, PlaybackPlugin or ImportPlugin")
     return plugin
 
 
@@ -200,8 +198,14 @@ def _require_matching_capabilities(plugin: InstalledPlugin, descriptor: SourceDe
     has_playback = descriptor.supports(SourceCapability.PLAYBACK)
     is_film = isinstance(plugin, FilmSourcePlugin)
     is_playback = isinstance(plugin, PlaybackPlugin)
-    if not has_film and not has_playback:
-        raise ValueError("descriptor must advertise film_metadata or playback")
+    has_import = descriptor.supports(SourceCapability.METADATA_IMPORT)
+    is_import = isinstance(plugin, ImportPlugin)
+    if is_import and plugin.import_api_version != 1:
+        raise ValueError("unsupported import API version")
+    if has_import != is_import:
+        raise ValueError("metadata_import capability requires an ImportPlugin")
+    if not has_film and not has_playback and not has_import:
+        raise ValueError("descriptor must advertise film_metadata, playback or metadata_import")
     if has_film and not is_film:
         raise ValueError("descriptor advertises film_metadata but Plugin is not a FilmSourcePlugin")
     if has_playback and not is_playback:

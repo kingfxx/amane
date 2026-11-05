@@ -10,7 +10,7 @@ from amane.enums import Language
 from amane.net.connectivity import ConnectivityOutcome, ConnectivityStatus, SkipReason
 from amane.net.errors import FailureReason, RequestError, SourceError
 from amane.net.http import WebClient
-from amane.parsing.file_info import ContentType
+from amane.parsing.file_info import ContentType, extract_number
 from amane.plugins.api import (
     EmptyPluginConfig,
     FilePlaybackTarget,
@@ -19,6 +19,8 @@ from amane.plugins.api import (
     HlsLocator,
     HlsPlaybackTarget,
     HlsPlaylist,
+    ImportPlugin,
+    ImportProvider,
     PlaybackMediaFile,
     PlaybackOffer,
     PlaybackPlugin,
@@ -29,6 +31,7 @@ from amane.plugins.api import (
     SubtitleTrack,
     UpstreamPlaybackTarget,
 )
+from amane.plugins.import_models import ImportCandidate, ImportImage
 from amane.plugins.models import (
     PLUGIN_API_VERSION,
     RESERVED_SOURCE_NAMESPACES,
@@ -57,6 +60,10 @@ _REEXPORTS: tuple[tuple[str, object], ...] = (
     ("HlsPlaybackTarget", HlsPlaybackTarget),
     ("HlsPlaylist", HlsPlaylist),
     ("HttpClient", HttpClient),
+    ("ImportCandidate", ImportCandidate),
+    ("ImportImage", ImportImage),
+    ("ImportPlugin", ImportPlugin),
+    ("ImportProvider", ImportProvider),
     ("Language", Language),
     ("MediaMetadata", MediaMetadata),
     ("PlaybackMediaFile", PlaybackMediaFile),
@@ -77,6 +84,7 @@ _REEXPORTS: tuple[tuple[str, object], ...] = (
     ("SubtitleTrack", SubtitleTrack),
     ("UpstreamPlaybackTarget", UpstreamPlaybackTarget),
     ("WebClient", WebClient),
+    ("extract_number", extract_number),
     ("film_actors", film_actors),
     ("is_external_source_id", is_external_source_id),
     ("validate_external_source_id", validate_external_source_id),

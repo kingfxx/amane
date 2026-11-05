@@ -25,6 +25,25 @@
     "film_metadata": "影片元数据",
     "playback": "播放",
     "actor_profile": "演员档案",
-    "actor_image": "演员头像"
+    "actor_image": "演员头像",
+    "metadata_import": "元数据导入"
+  },
+  "import": {
+    "title": "导入本地元数据",
+    "hint": "图片复制到 Amane; 预告片保留远程链接, 本地预览片只保存路径. 默认只补充空字段, 不触发刮削或整理.",
+    "path": "服务器目录",
+    "recursive": "包含子目录",
+    "library": "关联正片的媒体库 (可选)",
+    "libraryHint": "不选择媒体库时只导入元数据与附属资源.",
+    "preview": "预览导入",
+    "previewRequired": "请先预览导入内容",
+    "failed": "导入请求失败",
+    "empty": "没有发现可导入文件",
+    "fillOnly": "影片已存在, 只补充未锁定的空字段",
+    "counts": "图片 {{images}} 张 · 正片 {{files}} 个",
+    "remoteTrailer": "远程预告片: {{path}}",
+    "localTrailer": "本地预览片 (只保存路径): {{path}}",
+    "submitted": "已提交 {{count}} 个导入任务, 请在任务页查看结果.",
+    "execute": "导入选中影片 ({{count}})"
   }
 }

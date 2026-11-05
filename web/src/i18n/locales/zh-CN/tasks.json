@@ -70,7 +70,8 @@
     "delete": "删除",
     "semantic_index": "语义索引",
     "semantic_benchmark": "性能测试",
-    "actor_push": "推送演员"
+    "actor_push": "推送演员",
+    "plugin_import": "元数据导入"
   },
   "loadMoreChildren": "加载更多 ({{count}})",
   "logView": {
@@ -162,7 +163,8 @@
       "delete": "删除",
       "semantic_index": "语义索引",
       "semantic_benchmark": "性能测试",
-      "actor_push": "推送演员"
+      "actor_push": "推送演员",
+      "plugin_import": "元数据导入"
     },
     "cleanup": {
       "remove_missing_files": {
@@ -417,6 +419,23 @@
       "force": {
         "label": "强制覆盖",
         "description": "覆盖媒体服务器上已有的头像与人物字段"
+      }
+    },
+    "plugin_import": {
+      "source_id": {
+        "label": "导入插件"
+      },
+      "source_path": {
+        "label": "来源文件"
+      },
+      "source_hash": {
+        "label": "预览文件散列"
+      },
+      "root": {
+        "label": "授权目录"
+      },
+      "library_id": {
+        "label": "关联媒体库"
       }
     }
   },

@@ -15,6 +15,7 @@ from ...utils.collections import unique_ids
 from ...utils.text import normalize_long_text
 from ..models import (
     Comment,
+    ImportRecord,
     MediaFile,
     Metadata,
     MetadataActor,
@@ -47,6 +48,7 @@ from .facet_helpers import (
     resolve_scalar_facet_names,
     sync_metadata_facets,
 )
+from .media import _apply_path_phase
 
 logger = structlog.get_logger()
 
@@ -373,6 +375,9 @@ class MetadataRepoMixin(RepositoryMixinBase):
         content_type: ContentType | None = None,
         actor_genders: Mapping[str, ActorGender] | None = None,
         merge_raw: bool = False,
+        fill_only: bool = False,
+        import_record: ImportRecord | None = None,
+        import_files: Sequence[MediaFile] = (),
         **kwargs: Unpack[MetadataFields],
     ) -> Metadata:
         """查重忽略大小写; 已存在时不改写 number 的原始大小写, 也不改写类型.
@@ -394,6 +399,25 @@ class MetadataRepoMixin(RepositoryMixinBase):
             if existing:
                 before = _image_signature(existing)
                 fields = _filter_locked(fields, _locked_fields_of(existing), existing.field_sources or {})
+                if fill_only:
+                    snapshot = existing.model_dump()
+                    fields = cast(
+                        "MetadataFields",
+                        {
+                            key: value
+                            for key, value in fields.items()
+                            if key in {"raw", "field_sources"} or snapshot.get(key) in (None, "", [], {})
+                        },
+                    )
+                    sources = fields.get("field_sources", {})
+                    fields["field_sources"] = {
+                        **(existing.field_sources or {}),
+                        **{
+                            key: value
+                            for key, value in sources.items()
+                            if _LOCK_FIELD_COLUMN.get(MetadataField(key), key) in fields
+                        },
+                    }
                 incoming_raw = fields.get("raw")
                 if merge_raw and incoming_raw is not None:
                     fields["raw"] = {**(existing.raw or {}), **incoming_raw}
@@ -405,6 +429,9 @@ class MetadataRepoMixin(RepositoryMixinBase):
                 await clean_actor_names(session, existing, actor_genders)
                 await apply_facet_rules_to_metadata(session, existing)
                 await sync_metadata_facets(session, existing)
+                if import_record is not None:
+                    assert existing.id is not None
+                    await self._write_import(session, existing.id, import_record, import_files)
                 await session.commit()
                 await session.refresh(existing)
                 assert existing.id is not None
@@ -417,12 +444,53 @@ class MetadataRepoMixin(RepositoryMixinBase):
             await clean_actor_names(session, meta, actor_genders)
             await apply_facet_rules_to_metadata(session, meta)
             await sync_metadata_facets(session, meta)
+            if import_record is not None:
+                assert meta.id is not None
+                await self._write_import(session, meta.id, import_record, import_files)
             await session.commit()
             await session.refresh(meta)
             assert meta.id is not None
             if any(_image_signature(meta)):
                 await self.notify_media_changed(meta.id)
             return meta
+
+    async def _write_import(
+        self, session: AsyncSession, metadata_id: int, record: ImportRecord, files: Sequence[MediaFile]
+    ) -> None:
+        previous = (
+            await session.exec(
+                select(ImportRecord).where(
+                    ImportRecord.source_id == record.source_id, ImportRecord.source_path == record.source_path
+                )
+            )
+        ).first()
+        if previous is not None:
+            if previous.metadata_id != metadata_id:
+                raise ValueError("导入文件已关联其它影片, 请确认 NFO 番号")
+            previous.source_hash = record.source_hash
+            previous.local_trailer_paths = record.local_trailer_paths
+            session.add(previous)
+        else:
+            record.metadata_id = metadata_id
+            session.add(record)
+        for item in files:
+            indexed = (await session.exec(select(MediaFile).where(MediaFile.path == item.path))).first()
+            if indexed is not None:
+                if indexed.library_id != item.library_id or indexed.metadata_id not in (None, metadata_id):
+                    raise ValueError("媒体文件已关联其它媒体库或影片")
+                indexed.metadata_id = metadata_id
+                indexed.number = item.number
+                indexed.status = item.status
+                indexed.has_external_subtitle = item.has_external_subtitle
+                session.add(indexed)
+            else:
+                item.metadata_id = metadata_id
+                _apply_path_phase(item)
+                session.add(item)
+
+    async def list_import_records(self, metadata_id: int) -> list[ImportRecord]:
+        async with self._session() as session:
+            return list((await session.exec(select(ImportRecord).where(ImportRecord.metadata_id == metadata_id))).all())
 
     async def update_metadata(
         self,
@@ -536,6 +604,9 @@ class MetadataRepoMixin(RepositoryMixinBase):
                 source_id = source.id
                 await session.exec(
                     update(Comment).where(col(Comment.metadata_id) == source_id).values(metadata_id=target_id)
+                )
+                await session.exec(
+                    update(ImportRecord).where(col(ImportRecord.metadata_id) == source_id).values(metadata_id=target_id)
                 )
                 await session.exec(
                     update(MediaFile)

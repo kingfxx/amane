@@ -19,6 +19,21 @@ if TYPE_CHECKING:
     from ..db.models import Feed
 
 
+class PluginImportPayload(BaseModel):
+    source_id: str
+    root: str
+    source_path: str
+    source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    library_id: int | None = None
+
+
+class PluginImportResult(BaseModel):
+    type: Literal[TaskType.PLUGIN_IMPORT] = TaskType.PLUGIN_IMPORT
+    metadata_id: int
+    images: int
+    local_trailer_paths: list[str]
+
+
 class LibraryBase(BaseModel):
     """library_id + path. 覆盖项在 resolve 之前为 None, 不能当最终值读取."""
 

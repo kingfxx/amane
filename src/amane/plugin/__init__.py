@@ -11,7 +11,7 @@ from ..enums import Language
 from ..net.connectivity import ConnectivityOutcome, ConnectivityStatus, SkipReason
 from ..net.errors import FailureReason, RequestError, SourceError
 from ..net.http import WebClient
-from ..parsing.file_info import ContentType
+from ..parsing.file_info import ContentType, extract_number
 from ..plugins.api import (
     EmptyPluginConfig,
     FilePlaybackTarget,
@@ -20,6 +20,8 @@ from ..plugins.api import (
     HlsLocator,
     HlsPlaybackTarget,
     HlsPlaylist,
+    ImportPlugin,
+    ImportProvider,
     PlaybackMediaFile,
     PlaybackOffer,
     PlaybackPlugin,
@@ -30,6 +32,7 @@ from ..plugins.api import (
     SubtitleTrack,
     UpstreamPlaybackTarget,
 )
+from ..plugins.import_models import ImportCandidate, ImportImage
 from ..plugins.models import (
     PLUGIN_API_VERSION,
     RESERVED_SOURCE_NAMESPACES,
@@ -58,6 +61,10 @@ __all__ = [
     "HlsPlaybackTarget",
     "HlsPlaylist",
     "HttpClient",
+    "ImportCandidate",
+    "ImportImage",
+    "ImportPlugin",
+    "ImportProvider",
     "Language",
     "MediaMetadata",
     "PlaybackMediaFile",
@@ -78,6 +85,7 @@ __all__ = [
     "SubtitleTrack",
     "UpstreamPlaybackTarget",
     "WebClient",
+    "extract_number",
     "film_actors",
     "is_external_source_id",
     "validate_external_source_id",

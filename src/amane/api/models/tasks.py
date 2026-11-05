@@ -33,6 +33,7 @@ from ...handlers import (
     UpscalePayload,
     UpscaleResult,
 )
+from ...handlers.models import PluginImportPayload, PluginImportResult
 from ...parsing import ContentType, infer_content_type, parse_file_info
 
 
@@ -46,7 +47,8 @@ class TaskChildStatusCounts(BaseModel):
 
 
 TaskResultPayload = Annotated[
-    RefreshResult
+    PluginImportResult
+    | RefreshResult
     | OrganizeResult
     | ScanInvalidResult
     | DeleteResult
@@ -246,6 +248,10 @@ class UpscaleSubmission(UpscalePayload):
     type: Literal["upscale"]
 
 
+class PluginImportSubmission(PluginImportPayload):
+    type: Literal["plugin_import"]
+
+
 class R18ImportSubmission(R18ImportPayload):
     type: Literal["r18_import"]
 
@@ -282,7 +288,8 @@ class ActorPushSubmission(ActorPushPayload):
 
 
 TaskSubmission = Annotated[
-    RefreshSubmission
+    PluginImportSubmission
+    | RefreshSubmission
     | OrganizeSubmission
     | ScanInvalidSubmission
     | DeleteSubmission

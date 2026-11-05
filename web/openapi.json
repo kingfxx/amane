@@ -26,6 +26,134 @@
         }
       }
     },
+    "/api/imports/preview": {
+      "post": {
+        "tags": [
+          "imports"
+        ],
+        "summary": "Preview Import",
+        "operationId": "preview_import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/imports/execute": {
+      "post": {
+        "tags": [
+          "imports"
+        ],
+        "summary": "Execute Import",
+        "operationId": "execute_import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportExecuteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportExecuteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/imports/{metadata_id}/records": {
+      "get": {
+        "tags": [
+          "imports"
+        ],
+        "summary": "Get Import Records",
+        "operationId": "get_import_records",
+        "parameters": [
+          {
+            "name": "metadata_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Metadata Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImportRecordResponse"
+                  },
+                  "title": "Response Get Import Records"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent-guide": {
       "get": {
         "tags": [
@@ -5143,6 +5271,9 @@
               "schema": {
                 "oneOf": [
                   {
+                    "$ref": "#/components/schemas/PluginImportSubmission"
+                  },
+                  {
                     "$ref": "#/components/schemas/RefreshSubmission"
                   },
                   {
@@ -5185,6 +5316,7 @@
                 "discriminator": {
                   "propertyName": "type",
                   "mapping": {
+                    "plugin_import": "#/components/schemas/PluginImportSubmission",
                     "refresh": "#/components/schemas/RefreshSubmission",
                     "organize": "#/components/schemas/OrganizeSubmission",
                     "scan_invalid": "#/components/schemas/ScanInvalidSubmission",
@@ -9692,6 +9824,24 @@
         "title": "FilePhaseSummary",
         "description": "条目相位聚合; 判定见 ``parsing/file_info.py::summarize_file_phases``, definition 取最高档."
       },
+      "FilmActor": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "gender": {
+            "$ref": "#/components/schemas/ActorGender",
+            "default": "unknown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "FilmActor",
+        "description": "影片出演者. ``gender`` 缺省 ``unknown``; 名单语义能判定时爬虫必须写出 ``female`` / ``male``."
+      },
       "FootprintNoticeKind": {
         "type": "string",
         "enum": [
@@ -10293,6 +10443,235 @@
         "type": "object",
         "title": "HotSettings",
         "description": "运行时可更新, 持久化到 TOML. extra=forbid, 未知字段须校验失败."
+      },
+      "ImportCandidate": {
+        "properties": {
+          "source_path": {
+            "type": "string",
+            "title": "Source Path"
+          },
+          "source_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MediaMetadata"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ImportImage"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Images"
+          },
+          "local_trailer_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Local Trailer Paths"
+          },
+          "media_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Media Paths"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_path",
+          "source_hash",
+          "metadata"
+        ],
+        "title": "ImportCandidate"
+      },
+      "ImportExecuteRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PluginImportPayload"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ImportExecuteRequest"
+      },
+      "ImportExecuteResponse": {
+        "properties": {
+          "task_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Task Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_ids"
+        ],
+        "title": "ImportExecuteResponse"
+      },
+      "ImportImage": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "poster",
+              "thumb",
+              "still"
+            ],
+            "title": "Kind"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ],
+        "title": "ImportImage"
+      },
+      "ImportPreviewItem": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "existing_metadata_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Metadata Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "ImportPreviewItem"
+      },
+      "ImportPreviewRequest": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "recursive": {
+            "type": "boolean",
+            "title": "Recursive",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "path"
+        ],
+        "title": "ImportPreviewRequest"
+      },
+      "ImportPreviewResponse": {
+        "properties": {
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImportPreviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "root",
+          "items"
+        ],
+        "title": "ImportPreviewResponse"
+      },
+      "ImportRecordResponse": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "source_path": {
+            "type": "string",
+            "title": "Source Path"
+          },
+          "local_trailer_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Local Trailer Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "source_path",
+          "local_trailer_paths"
+        ],
+        "title": "ImportRecordResponse"
       },
       "Interrupt": {
         "properties": {
@@ -11814,6 +12193,178 @@
         ],
         "title": "MediaListResponse"
       },
+      "MediaMetadata": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "actors": {
+            "items": {
+              "$ref": "#/components/schemas/FilmActor"
+            },
+            "type": "array",
+            "title": "Actors"
+          },
+          "studio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Studio"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "runtime": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plot"
+          },
+          "poster_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Poster Urls"
+          },
+          "thumb_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Thumb Urls"
+          },
+          "trailer_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trailer Urls"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "directors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Directors"
+          },
+          "extrafanart": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extrafanart"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number"
+        ],
+        "title": "MediaMetadata"
+      },
       "MediaServerConfig": {
         "properties": {
           "kind": {
@@ -13299,6 +13850,124 @@
         },
         "type": "object",
         "title": "PluginConfigUpdate"
+      },
+      "PluginImportPayload": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "source_path": {
+            "type": "string",
+            "title": "Source Path"
+          },
+          "source_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "root",
+          "source_path",
+          "source_hash"
+        ],
+        "title": "PluginImportPayload"
+      },
+      "PluginImportResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "plugin_import",
+            "title": "Type",
+            "default": "plugin_import"
+          },
+          "metadata_id": {
+            "type": "integer",
+            "title": "Metadata Id"
+          },
+          "images": {
+            "type": "integer",
+            "title": "Images"
+          },
+          "local_trailer_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Local Trailer Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metadata_id",
+          "images",
+          "local_trailer_paths"
+        ],
+        "title": "PluginImportResult"
+      },
+      "PluginImportSubmission": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "source_path": {
+            "type": "string",
+            "title": "Source Path"
+          },
+          "source_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash"
+          },
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "plugin_import",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "root",
+          "source_path",
+          "source_hash",
+          "type"
+        ],
+        "title": "PluginImportSubmission"
       },
       "PluginListResponse": {
         "properties": {
@@ -15767,6 +16436,9 @@
             "items": {
               "oneOf": [
                 {
+                  "$ref": "#/components/schemas/PluginImportSubmission"
+                },
+                {
                   "$ref": "#/components/schemas/RefreshSubmission"
                 },
                 {
@@ -15814,6 +16486,7 @@
                   "cleanup": "#/components/schemas/CleanupSubmission",
                   "delete": "#/components/schemas/DeleteSubmission",
                   "organize": "#/components/schemas/OrganizeSubmission",
+                  "plugin_import": "#/components/schemas/PluginImportSubmission",
                   "r18_import": "#/components/schemas/R18ImportSubmission",
                   "refresh": "#/components/schemas/RefreshSubmission",
                   "rescrape": "#/components/schemas/RescrapeSubmission",
@@ -16269,6 +16942,9 @@
               {
                 "oneOf": [
                   {
+                    "$ref": "#/components/schemas/PluginImportResult"
+                  },
+                  {
                     "$ref": "#/components/schemas/RefreshResult"
                   },
                   {
@@ -16316,6 +16992,7 @@
                     "cleanup": "#/components/schemas/CleanupResult",
                     "delete": "#/components/schemas/DeleteResult",
                     "organize": "#/components/schemas/OrganizeResult",
+                    "plugin_import": "#/components/schemas/PluginImportResult",
                     "r18_import": "#/components/schemas/R18ImportResult",
                     "refresh": "#/components/schemas/RefreshResult",
                     "rescrape": "#/components/schemas/RescrapeResult",
@@ -16368,6 +17045,7 @@
       "TaskType": {
         "type": "string",
         "enum": [
+          "plugin_import",
           "scrape",
           "organize",
           "refresh",

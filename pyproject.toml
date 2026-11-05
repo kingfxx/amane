@@ -88,7 +88,7 @@ packages = ["src/amane"]
 exclude = ["tests/", "docs/", "scripts/", "web/", ".github/"]
 
 [tool.pyright]
-include = ["src/amane/", "tests/", "scripts/"]
+include = ["src/amane/", "tests/", "scripts/", "extensions/nfo-import/"]
 exclude = [
     "src/amane/db/migrations/",
     "**/node_modules",
@@ -102,7 +102,7 @@ reportMissingImports = "warning"
 reportAttributeAccessIssue = "warning"
 
 [tool.ty]
-src = { include = ["src/amane/", "scripts/"], exclude = ["src/amane/db/migrations/"] }
+src = { include = ["src/amane/", "scripts/", "extensions/nfo-import/"], exclude = ["src/amane/db/migrations/"] }
 
 [[tool.ty.overrides]]
 include = ["src/amane/semantic/onnx.py"]

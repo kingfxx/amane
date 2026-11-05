@@ -34,6 +34,7 @@ from ..handlers import (
     SemanticIndexHandler,
     UpscaleHandler,
 )
+from ..handlers.plugin_import import PluginImportHandler
 from ..library import InventoryStore
 from ..llm import TranslationCache, TranslationCoalescer, build_translator
 from ..media.watermarks import user_watermark_dir
@@ -573,6 +574,7 @@ def build_handlers(
     if inventory_store is None:
         inventory_store = InventoryStore()
     handlers: dict[TaskType, TaskHandler[Any, Any]] = {
+        TaskType.PLUGIN_IMPORT: PluginImportHandler(repo, resource_store, plugin_manager, hot, safe_dirs),
         TaskType.REFRESH: RefreshHandler(repo, hot.watcher.media_extensions, inventory_store),
         TaskType.SCRAPE: ScrapeHandler(
             repo,

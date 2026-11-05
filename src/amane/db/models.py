@@ -32,6 +32,7 @@ class MediaFileStatus(StrEnum):
 
 
 class TaskType(StrEnum):
+    PLUGIN_IMPORT = "plugin_import"
     SCRAPE = "scrape"
     ORGANIZE = "organize"
     REFRESH = "refresh"
@@ -519,6 +520,20 @@ class Resource(SQLModel, table=True):
 #
 # Metadata 上 JSON/标量列仍是刮削与 NFO 真值; 下列实体 + 关联表是查询投影.
 # Actor 为一等人物实体 (孤儿保留): name 为展示名, 别名行在 ActorAlias; 跨名屏蔽见 FacetRule(block).
+
+
+class ImportRecord(SQLModel, table=True):
+    """插件导入来源与本地预览片关联, 不参与刮削快照替换."""
+
+    __tablename__ = "import_records"  # type: ignore[assignment]
+    __table_args__ = (UniqueConstraint("source_id", "source_path", name="uq_import_source_path"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    metadata_id: int = Field(foreign_key="metadata.id", index=True, ondelete="CASCADE")
+    source_id: str
+    source_path: str
+    source_hash: str
+    local_trailer_paths: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
 
 
 class Actor(SQLModel, table=True):

@@ -1802,6 +1802,19 @@ export type FilePhaseSummary = {
 };
 
 /**
+ * FilmActor
+ *
+ * 影片出演者. ``gender`` 缺省 ``unknown``; 名单语义能判定时爬虫必须写出 ``female`` / ``male``.
+ */
+export type FilmActor = {
+    /**
+     * Name
+     */
+    name: string;
+    gender?: ActorGender;
+};
+
+/**
  * FootprintNoticeKind
  *
  * 未能纳入清单的项. 只给码与参数, 文案由面板按界面语言给出.
@@ -1857,6 +1870,140 @@ export type HotSettings = {
     plugins?: {
         [key: string]: PluginConfig;
     };
+};
+
+/**
+ * ImportCandidate
+ */
+export type ImportCandidate = {
+    /**
+     * Source Path
+     */
+    source_path: string;
+    /**
+     * Source Hash
+     */
+    source_hash: string;
+    metadata: MediaMetadata;
+    /**
+     * Images
+     */
+    images?: Array<ImportImage>;
+    /**
+     * Local Trailer Paths
+     */
+    local_trailer_paths?: Array<string>;
+    /**
+     * Media Paths
+     */
+    media_paths?: Array<string>;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
+};
+
+/**
+ * ImportExecuteRequest
+ */
+export type ImportExecuteRequest = {
+    /**
+     * Items
+     */
+    items: Array<PluginImportPayload>;
+};
+
+/**
+ * ImportExecuteResponse
+ */
+export type ImportExecuteResponse = {
+    /**
+     * Task Ids
+     */
+    task_ids: Array<number>;
+};
+
+/**
+ * ImportImage
+ */
+export type ImportImage = {
+    /**
+     * Kind
+     */
+    kind: 'poster' | 'thumb' | 'still';
+    /**
+     * Path
+     */
+    path: string;
+};
+
+/**
+ * ImportPreviewItem
+ */
+export type ImportPreviewItem = {
+    /**
+     * Path
+     */
+    path: string;
+    candidate?: ImportCandidate | null;
+    /**
+     * Existing Metadata Id
+     */
+    existing_metadata_id?: number | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
+/**
+ * ImportPreviewRequest
+ */
+export type ImportPreviewRequest = {
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Recursive
+     */
+    recursive?: boolean;
+};
+
+/**
+ * ImportPreviewResponse
+ */
+export type ImportPreviewResponse = {
+    /**
+     * Root
+     */
+    root: string;
+    /**
+     * Items
+     */
+    items: Array<ImportPreviewItem>;
+};
+
+/**
+ * ImportRecordResponse
+ */
+export type ImportRecordResponse = {
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Source Path
+     */
+    source_path: string;
+    /**
+     * Local Trailer Paths
+     */
+    local_trailer_paths: Array<string>;
 };
 
 /**
@@ -2592,6 +2739,84 @@ export type MediaListResponse = {
      * Total
      */
     total: number;
+};
+
+/**
+ * MediaMetadata
+ */
+export type MediaMetadata = {
+    /**
+     * Number
+     */
+    number: string;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Actors
+     */
+    actors?: Array<FilmActor>;
+    /**
+     * Studio
+     */
+    studio?: string | null;
+    /**
+     * Publisher
+     */
+    publisher?: string | null;
+    /**
+     * Release
+     */
+    release?: string | null;
+    /**
+     * Runtime
+     */
+    runtime?: number | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+    /**
+     * Series
+     */
+    series?: string | null;
+    /**
+     * Plot
+     */
+    plot?: string | null;
+    /**
+     * Poster Urls
+     */
+    poster_urls?: Array<string>;
+    /**
+     * Thumb Urls
+     */
+    thumb_urls?: Array<string>;
+    /**
+     * Trailer Urls
+     */
+    trailer_urls?: Array<string>;
+    /**
+     * Score
+     */
+    score?: number | null;
+    /**
+     * External Id
+     */
+    external_id?: string | null;
+    /**
+     * Source Url
+     */
+    source_url?: string | null;
+    /**
+     * Directors
+     */
+    directors?: Array<string>;
+    /**
+     * Extrafanart
+     */
+    extrafanart?: Array<string>;
 };
 
 /**
@@ -3464,6 +3689,84 @@ export type PluginConfigUpdate = {
     config?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * PluginImportPayload
+ */
+export type PluginImportPayload = {
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Root
+     */
+    root: string;
+    /**
+     * Source Path
+     */
+    source_path: string;
+    /**
+     * Source Hash
+     */
+    source_hash: string;
+    /**
+     * Library Id
+     */
+    library_id?: number | null;
+};
+
+/**
+ * PluginImportResult
+ */
+export type PluginImportResult = {
+    /**
+     * Type
+     */
+    type?: 'plugin_import';
+    /**
+     * Metadata Id
+     */
+    metadata_id: number;
+    /**
+     * Images
+     */
+    images: number;
+    /**
+     * Local Trailer Paths
+     */
+    local_trailer_paths: Array<string>;
+};
+
+/**
+ * PluginImportSubmission
+ */
+export type PluginImportSubmission = {
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Root
+     */
+    root: string;
+    /**
+     * Source Path
+     */
+    source_path: string;
+    /**
+     * Source Hash
+     */
+    source_hash: string;
+    /**
+     * Library Id
+     */
+    library_id?: number | null;
+    /**
+     * Type
+     */
+    type: 'plugin_import';
 };
 
 /**
@@ -4911,7 +5214,7 @@ export type TaskBatchSubmitRequest = {
     /**
      * Submissions
      */
-    submissions: Array<RefreshSubmission | OrganizeSubmission | ScanInvalidSubmission | DeleteSubmission | ScrapeSubmission | CleanupSubmission | UpscaleSubmission | R18ImportSubmission | ActorScrapeSubmission | ActorPushSubmission | RescrapeSubmission | SemanticIndexSubmission | SemanticBenchmarkSubmission>;
+    submissions: Array<PluginImportSubmission | RefreshSubmission | OrganizeSubmission | ScanInvalidSubmission | DeleteSubmission | ScrapeSubmission | CleanupSubmission | UpscaleSubmission | R18ImportSubmission | ActorScrapeSubmission | ActorPushSubmission | RescrapeSubmission | SemanticIndexSubmission | SemanticBenchmarkSubmission>;
 };
 
 /**
@@ -5151,6 +5454,8 @@ export type TaskResponse = {
      * Result
      */
     result?: ({
+        type: 'plugin_import';
+    } & PluginImportResult) | ({
         type: 'refresh';
     } & RefreshResult) | ({
         type: 'organize';
@@ -5192,7 +5497,7 @@ export type TaskStatus = 'queued' | 'running' | 'done' | 'failed';
 /**
  * TaskType
  */
-export type TaskType = 'scrape' | 'organize' | 'refresh' | 'cleanup' | 'upscale' | 'r18_import' | 'actor_scrape' | 'rescrape' | 'scan_invalid' | 'delete' | 'semantic_index' | 'semantic_benchmark' | 'actor_push';
+export type TaskType = 'plugin_import' | 'scrape' | 'organize' | 'refresh' | 'cleanup' | 'upscale' | 'r18_import' | 'actor_scrape' | 'rescrape' | 'scan_invalid' | 'delete' | 'semantic_index' | 'semantic_benchmark' | 'actor_push';
 
 /**
  * TaskWorkerResponse
@@ -5713,6 +6018,88 @@ export type HealthCheckResponses = {
 };
 
 export type HealthCheckResponse = HealthCheckResponses[keyof HealthCheckResponses];
+
+export type PreviewImportData = {
+    body: ImportPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/api/imports/preview';
+};
+
+export type PreviewImportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewImportError = PreviewImportErrors[keyof PreviewImportErrors];
+
+export type PreviewImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportPreviewResponse;
+};
+
+export type PreviewImportResponse = PreviewImportResponses[keyof PreviewImportResponses];
+
+export type ExecuteImportData = {
+    body: ImportExecuteRequest;
+    path?: never;
+    query?: never;
+    url: '/api/imports/execute';
+};
+
+export type ExecuteImportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExecuteImportError = ExecuteImportErrors[keyof ExecuteImportErrors];
+
+export type ExecuteImportResponses = {
+    /**
+     * Successful Response
+     */
+    202: ImportExecuteResponse;
+};
+
+export type ExecuteImportResponse = ExecuteImportResponses[keyof ExecuteImportResponses];
+
+export type GetImportRecordsData = {
+    body?: never;
+    path: {
+        /**
+         * Metadata Id
+         */
+        metadata_id: number;
+    };
+    query?: never;
+    url: '/api/imports/{metadata_id}/records';
+};
+
+export type GetImportRecordsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetImportRecordsError = GetImportRecordsErrors[keyof GetImportRecordsErrors];
+
+export type GetImportRecordsResponses = {
+    /**
+     * Response Get Import Records
+     *
+     * Successful Response
+     */
+    200: Array<ImportRecordResponse>;
+};
+
+export type GetImportRecordsResponse = GetImportRecordsResponses[keyof GetImportRecordsResponses];
 
 export type GetAgentGuideData = {
     body?: never;
@@ -8593,6 +8980,8 @@ export type SubmitTaskData = {
      * Req
      */
     body: ({
+        type: 'plugin_import';
+    } & PluginImportSubmission) | ({
         type: 'refresh';
     } & RefreshSubmission) | ({
         type: 'organize';

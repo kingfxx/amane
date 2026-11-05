@@ -51,6 +51,7 @@ class SourceCapability(StrEnum):
     ACTOR_PROFILE = "actor_profile"
     ACTOR_IMAGE = "actor_image"
     PLAYBACK = "playback"
+    METADATA_IMPORT = "metadata_import"
 
 
 class SourceTrait(StrEnum):

@@ -9,6 +9,7 @@
 
 | 任务 | 职责 | 排除范围 |
 | ------ | ------ | ------ |
+| `PLUGIN_IMPORT` | 按导入插件候选补充元数据、复制图片、登记来源与文件关联; 契约见 [plugins.md](plugins.md) | 网络刮削、整理与预览片复制 |
 | `REFRESH` | 扫描增删、注册 MediaFile、fan-out SCRAPE (`use_cache` 原样转发); 整库范围时顺带写入清理清单 | 移动文件、写 NFO |
 | `SCRAPE` | 联网聚合 → DB → Resource; `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
 | `ORGANIZE` | 范围内已有 Metadata 的 MediaFile 按路径模板落盘, 并删除本次腾空的目录; 缺资源时 `acquire` 可出站 HTTP | 扫描磁盘、运行爬虫、修改 Metadata |

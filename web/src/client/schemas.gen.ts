@@ -3085,6 +3085,25 @@ export const FilePhaseSummarySchema = {
     description: '条目相位聚合; 判定见 ``parsing/file_info.py::summarize_file_phases``, definition 取最高档.'
 } as const;
 
+export const FilmActorSchema = {
+    properties: {
+        name: {
+            type: 'string',
+            title: 'Name'
+        },
+        gender: {
+            $ref: '#/components/schemas/ActorGender',
+            default: 'unknown'
+        }
+    },
+    type: 'object',
+    required: [
+        'name'
+    ],
+    title: 'FilmActor',
+    description: '影片出演者. ``gender`` 缺省 ``unknown``; 名单语义能判定时爬虫必须写出 ``female`` / ``male``.'
+} as const;
+
 export const FootprintNoticeKindSchema = {
     type: 'string',
     enum: [
@@ -3689,6 +3708,243 @@ export const HotSettingsSchema = {
     type: 'object',
     title: 'HotSettings',
     description: '运行时可更新, 持久化到 TOML. extra=forbid, 未知字段须校验失败.'
+} as const;
+
+export const ImportCandidateSchema = {
+    properties: {
+        source_path: {
+            type: 'string',
+            title: 'Source Path'
+        },
+        source_hash: {
+            type: 'string',
+            pattern: '^[0-9a-f]{64}$',
+            title: 'Source Hash'
+        },
+        metadata: {
+            $ref: '#/components/schemas/MediaMetadata'
+        },
+        images: {
+            items: {
+                $ref: '#/components/schemas/ImportImage'
+            },
+            type: 'array',
+            maxItems: 500,
+            title: 'Images'
+        },
+        local_trailer_paths: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            maxItems: 100,
+            title: 'Local Trailer Paths'
+        },
+        media_paths: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            maxItems: 100,
+            title: 'Media Paths'
+        },
+        warnings: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            maxItems: 100,
+            title: 'Warnings'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+        'source_path',
+        'source_hash',
+        'metadata'
+    ],
+    title: 'ImportCandidate'
+} as const;
+
+export const ImportExecuteRequestSchema = {
+    properties: {
+        items: {
+            items: {
+                $ref: '#/components/schemas/PluginImportPayload'
+            },
+            type: 'array',
+            maxItems: 500,
+            minItems: 1,
+            title: 'Items'
+        }
+    },
+    type: 'object',
+    required: [
+        'items'
+    ],
+    title: 'ImportExecuteRequest'
+} as const;
+
+export const ImportExecuteResponseSchema = {
+    properties: {
+        task_ids: {
+            items: {
+                type: 'integer'
+            },
+            type: 'array',
+            title: 'Task Ids'
+        }
+    },
+    type: 'object',
+    required: [
+        'task_ids'
+    ],
+    title: 'ImportExecuteResponse'
+} as const;
+
+export const ImportImageSchema = {
+    properties: {
+        kind: {
+            type: 'string',
+            enum: [
+                'poster',
+                'thumb',
+                'still'
+            ],
+            title: 'Kind'
+        },
+        path: {
+            type: 'string',
+            title: 'Path'
+        }
+    },
+    additionalProperties: false,
+    type: 'object',
+    required: [
+        'kind',
+        'path'
+    ],
+    title: 'ImportImage'
+} as const;
+
+export const ImportPreviewItemSchema = {
+    properties: {
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        candidate: {
+            anyOf: [
+                {
+                    $ref: '#/components/schemas/ImportCandidate'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        existing_metadata_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Existing Metadata Id'
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
+        }
+    },
+    type: 'object',
+    required: [
+        'path'
+    ],
+    title: 'ImportPreviewItem'
+} as const;
+
+export const ImportPreviewRequestSchema = {
+    properties: {
+        source_id: {
+            type: 'string',
+            title: 'Source Id'
+        },
+        path: {
+            type: 'string',
+            title: 'Path'
+        },
+        recursive: {
+            type: 'boolean',
+            title: 'Recursive',
+            default: false
+        }
+    },
+    type: 'object',
+    required: [
+        'source_id',
+        'path'
+    ],
+    title: 'ImportPreviewRequest'
+} as const;
+
+export const ImportPreviewResponseSchema = {
+    properties: {
+        root: {
+            type: 'string',
+            title: 'Root'
+        },
+        items: {
+            items: {
+                $ref: '#/components/schemas/ImportPreviewItem'
+            },
+            type: 'array',
+            title: 'Items'
+        }
+    },
+    type: 'object',
+    required: [
+        'root',
+        'items'
+    ],
+    title: 'ImportPreviewResponse'
+} as const;
+
+export const ImportRecordResponseSchema = {
+    properties: {
+        source_id: {
+            type: 'string',
+            title: 'Source Id'
+        },
+        source_path: {
+            type: 'string',
+            title: 'Source Path'
+        },
+        local_trailer_paths: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Local Trailer Paths'
+        }
+    },
+    type: 'object',
+    required: [
+        'source_id',
+        'source_path',
+        'local_trailer_paths'
+    ],
+    title: 'ImportRecordResponse'
 } as const;
 
 export const InterruptSchema = {
@@ -5235,6 +5491,179 @@ export const MediaListResponseSchema = {
     title: 'MediaListResponse'
 } as const;
 
+export const MediaMetadataSchema = {
+    properties: {
+        number: {
+            type: 'string',
+            title: 'Number'
+        },
+        title: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Title'
+        },
+        actors: {
+            items: {
+                $ref: '#/components/schemas/FilmActor'
+            },
+            type: 'array',
+            title: 'Actors'
+        },
+        studio: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Studio'
+        },
+        publisher: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Publisher'
+        },
+        release: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Release'
+        },
+        runtime: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Runtime'
+        },
+        tags: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Tags'
+        },
+        series: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Series'
+        },
+        plot: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Plot'
+        },
+        poster_urls: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Poster Urls'
+        },
+        thumb_urls: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Thumb Urls'
+        },
+        trailer_urls: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Trailer Urls'
+        },
+        score: {
+            anyOf: [
+                {
+                    type: 'number'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Score'
+        },
+        external_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'External Id'
+        },
+        source_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Source Url'
+        },
+        directors: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Directors'
+        },
+        extrafanart: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Extrafanart'
+        }
+    },
+    type: 'object',
+    required: [
+        'number'
+    ],
+    title: 'MediaMetadata'
+} as const;
+
 export const MediaServerConfigSchema = {
     properties: {
         kind: {
@@ -6752,6 +7181,127 @@ export const PluginConfigUpdateSchema = {
     },
     type: 'object',
     title: 'PluginConfigUpdate'
+} as const;
+
+export const PluginImportPayloadSchema = {
+    properties: {
+        source_id: {
+            type: 'string',
+            title: 'Source Id'
+        },
+        root: {
+            type: 'string',
+            title: 'Root'
+        },
+        source_path: {
+            type: 'string',
+            title: 'Source Path'
+        },
+        source_hash: {
+            type: 'string',
+            pattern: '^[0-9a-f]{64}$',
+            title: 'Source Hash'
+        },
+        library_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Library Id'
+        }
+    },
+    type: 'object',
+    required: [
+        'source_id',
+        'root',
+        'source_path',
+        'source_hash'
+    ],
+    title: 'PluginImportPayload'
+} as const;
+
+export const PluginImportResultSchema = {
+    properties: {
+        type: {
+            type: 'string',
+            const: 'plugin_import',
+            title: 'Type',
+            default: 'plugin_import'
+        },
+        metadata_id: {
+            type: 'integer',
+            title: 'Metadata Id'
+        },
+        images: {
+            type: 'integer',
+            title: 'Images'
+        },
+        local_trailer_paths: {
+            items: {
+                type: 'string'
+            },
+            type: 'array',
+            title: 'Local Trailer Paths'
+        }
+    },
+    type: 'object',
+    required: [
+        'metadata_id',
+        'images',
+        'local_trailer_paths'
+    ],
+    title: 'PluginImportResult'
+} as const;
+
+export const PluginImportSubmissionSchema = {
+    properties: {
+        source_id: {
+            type: 'string',
+            title: 'Source Id'
+        },
+        root: {
+            type: 'string',
+            title: 'Root'
+        },
+        source_path: {
+            type: 'string',
+            title: 'Source Path'
+        },
+        source_hash: {
+            type: 'string',
+            pattern: '^[0-9a-f]{64}$',
+            title: 'Source Hash'
+        },
+        library_id: {
+            anyOf: [
+                {
+                    type: 'integer'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Library Id'
+        },
+        type: {
+            type: 'string',
+            const: 'plugin_import',
+            title: 'Type'
+        }
+    },
+    type: 'object',
+    required: [
+        'source_id',
+        'root',
+        'source_path',
+        'source_hash',
+        'type'
+    ],
+    title: 'PluginImportSubmission'
 } as const;
 
 export const PluginListResponseSchema = {
@@ -9282,6 +9832,9 @@ export const TaskBatchSubmitRequestSchema = {
             items: {
                 oneOf: [
                     {
+                        $ref: '#/components/schemas/PluginImportSubmission'
+                    },
+                    {
                         $ref: '#/components/schemas/RefreshSubmission'
                     },
                     {
@@ -9329,6 +9882,7 @@ export const TaskBatchSubmitRequestSchema = {
                         cleanup: '#/components/schemas/CleanupSubmission',
                         delete: '#/components/schemas/DeleteSubmission',
                         organize: '#/components/schemas/OrganizeSubmission',
+                        plugin_import: '#/components/schemas/PluginImportSubmission',
                         r18_import: '#/components/schemas/R18ImportSubmission',
                         refresh: '#/components/schemas/RefreshSubmission',
                         rescrape: '#/components/schemas/RescrapeSubmission',
@@ -9791,6 +10345,9 @@ export const TaskResponseSchema = {
                 {
                     oneOf: [
                         {
+                            $ref: '#/components/schemas/PluginImportResult'
+                        },
+                        {
                             $ref: '#/components/schemas/RefreshResult'
                         },
                         {
@@ -9838,6 +10395,7 @@ export const TaskResponseSchema = {
                             cleanup: '#/components/schemas/CleanupResult',
                             delete: '#/components/schemas/DeleteResult',
                             organize: '#/components/schemas/OrganizeResult',
+                            plugin_import: '#/components/schemas/PluginImportResult',
                             r18_import: '#/components/schemas/R18ImportResult',
                             refresh: '#/components/schemas/RefreshResult',
                             rescrape: '#/components/schemas/RescrapeResult',
@@ -9893,6 +10451,7 @@ export const TaskStatusSchema = {
 export const TaskTypeSchema = {
     type: 'string',
     enum: [
+        'plugin_import',
         'scrape',
         'organize',
         'refresh',

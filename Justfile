@@ -7,10 +7,19 @@ set shell := ["pwsh", "-NoProfile", "-Command"]
 # CLI (Go) 的构建入口单独一份, 与根一样同时兼容 sh 与 pwsh
 import 'cli/justfile'
 
-CHECK_DIRS := "src/amane tests scripts"
+CHECK_DIRS := "src/amane tests scripts extensions/nfo-import"
 
 default:
     @just --list
+
+# 独立扩展与主机导入契约的验证
+test-extensions:
+    uv run pytest tests/plugins/test_import_extension.py tests/api/test_imports.py -q
+    node --test extensions/115-playback/search.test.cjs
+
+# 两个扩展分别生成可安装文件
+package-extensions:
+    uv run python scripts/package_extensions.py
 
 host := env("AMANE_HOST", "127.0.0.1")
 port := env("AMANE_PORT", "8000")

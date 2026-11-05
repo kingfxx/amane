@@ -1,11 +1,13 @@
 # 来源插件
 
 > 本文记录影片刮削来源与播放源插件的边界、发现顺序、配置契约与兼容性要求. 通用爬虫实现见 [crawlers.md](crawlers.md), 配置进程内 rebuild 见 [config.md](config.md).
-> 播放钩子与播放目标的逐字段契约 (probe / resolve / subtitle 的返回值, `key` 形状, `cache_ttl` 上限, HLS 定位) 写在 `src/amane/plugin/api.py` 的 docstring 里.
+> 公开导出见 `src/amane/plugin/__init__.py`; 播放契约见 `src/amane/plugins/api.py`.
 
 ## 插件边界
 
-插件 API v1 开放**影片元数据来源**与**播放源**. 二者共用 `{cold.data_dir}/plugins/sources/<id>/` 与 HotSettings `plugins.<id>` 信封; 调用路径、输入输出与 Factory 分离. 插件不直接访问 Repository、任务 Worker、FastAPI 或前端运行时.
+插件 API v1 开放**影片元数据来源**、**播放源**与**元数据导入**. 共用 `{cold.data_dir}/plugins/sources/<id>/` 与 HotSettings `plugins.<id>` 信封; 调用路径与输入输出分离. 插件不直接访问 Repository、任务 Worker、FastAPI 或前端运行时.
+
+导入采用独立契约 v1 (`ImportPlugin.import_api_version`), 不改变既有来源 API; 安装校验共用 `plugins/packaging.py::_require_matching_capabilities`. `plugins/importing.py` 在线程池读取候选并校验真实路径; `handlers/plugin_import.py::PluginImportHandler` 重新校验预览散列, 按来源文件独立提交任务. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一写事务中补充未锁定空字段、登记正片和导入记录; `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须同时处理其归属. 图片按内容复制, 预告片保留远程链接, 本地预览片只记录路径. 导入禁止派生刮削与整理任务; 格式规则只在独立插件中实现.
 
 影片来源通过一个窄接口接收 `SearchQuery` 并返回 `MediaMetadata`, 随后进入现有聚合 DAG. `MediaMetadata.actors` 为 `list[FilmActor]`, 也接受 `list[str]` (性别 `unknown`), API 版本号不因此递增; 性别契约见 [crawlers.md](crawlers.md).
 
@@ -90,4 +92,4 @@ descriptor 声明来源能力、支持的内容类型、语言、访问 URL、`t
 
 刮削任务的 Hot 配置快照包含 `plugins` section, 其中的密钥字段按 [observability.md](observability.md) 的脱敏规则处理. 插件来源使用与内置来源相同的 `SiteOutcomeRecord` 和 HTTP 记录格式. 任务记录当前保存来源 ID 与插件配置, 不保存 descriptor / version 快照; 插件版本快照与回放兼容性尚未纳入当前 API 版本.
 
-面向社区作者的开发步骤见 [用户文档](../user/plugins.md), 本文只写本仓库主机侧契约. 当前不支持插件自定义任务、数据库迁移、API 路由、React 页面、演员来源、进程隔离、插件自带第三方依赖; 需要其它能力时应先扩展插件 API 版本和对应的权限边界.
+面向社区作者的开发步骤见 [用户文档](../user/plugins.md). 插件不能自定义任务、数据库迁移、API 路由或 React 页面; 导入复用主机固定入口. 演员来源、进程隔离与插件自带第三方依赖尚未开放.

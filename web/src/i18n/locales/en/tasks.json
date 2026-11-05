@@ -82,7 +82,8 @@
     "delete": "Delete",
     "semantic_index": "Semantic index",
     "semantic_benchmark": "Benchmark",
-    "actor_push": "Push actors"
+    "actor_push": "Push actors",
+    "plugin_import": "Metadata import"
   },
   "loadMoreChildren": "Load more ({{count}})",
   "loadMoreChildren_one": "Load more ({{count}})",
@@ -194,7 +195,8 @@
       "delete": "Delete",
       "semantic_index": "Semantic index",
       "semantic_benchmark": "Benchmark",
-      "actor_push": "Push actors"
+      "actor_push": "Push actors",
+      "plugin_import": "Metadata import"
     },
     "cleanup": {
       "remove_missing_files": {
@@ -448,6 +450,23 @@
       "force": {
         "label": "Force overwrite",
         "description": "Overwrite existing images and person fields on the media server"
+      }
+    },
+    "plugin_import": {
+      "source_id": {
+        "label": "Import plugin"
+      },
+      "source_path": {
+        "label": "Source file"
+      },
+      "source_hash": {
+        "label": "Preview file hash"
+      },
+      "root": {
+        "label": "Authorized directory"
+      },
+      "library_id": {
+        "label": "Associated library"
       }
     }
   },

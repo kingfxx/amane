@@ -9,6 +9,7 @@ from ...handlers import (
     CleanupPayload,
     DeletePayload,
     OrganizePayload,
+    PluginImportPayload,
     R18ImportPayload,
     RefreshPayload,
     RescrapePayload,
@@ -34,12 +35,14 @@ from ..models import (
     TaskSubmission,
     UpscaleSubmission,
 )
+from ..models.tasks import PluginImportSubmission
 
 if TYPE_CHECKING:
     from ...db.repository import Repository
 
 ResolvedPayload = (
-    RefreshPayload
+    PluginImportPayload
+    | RefreshPayload
     | ScrapePayload
     | ScanInvalidPayload
     | DeletePayload
@@ -57,6 +60,8 @@ ResolvedPayload = (
 
 async def resolve_submission(req: TaskSubmission, repo: Repository) -> tuple[TaskType, ResolvedPayload]:
     match req:
+        case PluginImportSubmission():
+            return TaskType.PLUGIN_IMPORT, req
         case RefreshSubmission():
             await req.resolve(repo)
             return TaskType.REFRESH, req

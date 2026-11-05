@@ -1,10 +1,11 @@
-import { Badge, Card, Group, Stack, Switch, Text } from "@mantine/core";
+import { Badge, Button, Card, Group, Stack, Switch, Text } from "@mantine/core";
 import { IconSettings, IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PluginResponse } from "@/client/types.gen";
 import { HintedActionIcon } from "@/components/common/hinted-action-icon";
 import { PluginSettingsDialog } from "@/components/plugins/plugin-settings-dialog";
+import { ImportPanel } from "@/components/plugins/import-panel";
 import { hasConfigurableFields, resolvePluginSchema } from "@/components/plugins/plugin-schema";
 import { useUninstallPlugin, useUpdatePlugin } from "@/hooks/use-plugins";
 import { confirm } from "@/lib/confirm";
@@ -18,6 +19,7 @@ export function PluginCard({ plugin }: { plugin: PluginResponse }) {
   const mutation = useUpdatePlugin();
   const uninstall = useUninstallPlugin();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const schema = resolvePluginSchema(plugin.config_schema);
   const config = plugin.config.config ?? {};
   const enabled = plugin.config.enabled ?? true;
@@ -53,6 +55,22 @@ export function PluginCard({ plugin }: { plugin: PluginResponse }) {
   return (
     <Card withBorder radius="md" padding="md">
       <Stack gap="xs" h="100%">
+        {(plugin.descriptor.capabilities ?? []).includes("metadata_import") ? (
+          <>
+            <Button
+              variant="light"
+              disabled={!enabled || pending}
+              onClick={() => setImportOpen(true)}
+            >
+              {t("import.title")}
+            </Button>
+            <ImportPanel
+              sourceId={plugin.descriptor.id}
+              opened={importOpen}
+              onClose={() => setImportOpen(false)}
+            />
+          </>
+        ) : null}
         <Group justify="space-between" align="flex-start" gap="xs" wrap="nowrap">
           <Stack gap={2} style={{ minWidth: 0 }}>
             <Text fw={600} lineClamp={2}>
