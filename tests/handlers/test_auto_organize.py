@@ -210,7 +210,7 @@ async def test_empty_scope_stays_empty_run(repo: Repository, resource_store: Res
 async def test_repeated_single_file_organize_keeps_file_in_place(
     repo: Repository, resource_store: ResourceStore, tmp_path: Path
 ) -> None:
-    """同一文件整理两次: 第二次走已就位分支, 文件仍在目标路径且不算失败."""
+    """同一文件整理两次: 第二次跳过全部落盘操作."""
     lib_root = tmp_path / "lib"
     incoming = lib_root / "incoming"
     incoming.mkdir(parents=True)
@@ -233,8 +233,21 @@ async def test_repeated_single_file_organize_keeps_file_in_place(
     assert first.success is True and second.success is True
     assert first.result is not None and second.result is not None
     assert first.result.organized == 1
+    assert second.result.skipped == 1 and second.result.organized == 0
     assert second.result.failed == 0 and second.result.conflicted == 0
     moved = await repo.get_media_file(media.id)
     assert moved is not None
     assert moved.path != str(src)
     assert Path(moved.path).read_bytes() == b"video"
+
+
+@pytest.mark.asyncio
+async def test_rescrape_preserves_organized_marker(repo: Repository, tmp_path: Path) -> None:
+    _, media_id = await _library_with_file(repo, tmp_path, auto_organize=True)
+    first = await _handler(repo).handle(ScrapePayload(number="MIDV-123", media_file_id=media_id))
+    assert first.success
+    await repo.update_media_file(media_id, organized=True)
+    second = await _handler(repo).handle(ScrapePayload(number="MIDV-123", media_file_id=media_id))
+    assert second.success and _organize_followups(second) == []
+    media = await repo.get_media_file(media_id)
+    assert media is not None and media.organized

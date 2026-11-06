@@ -5451,6 +5451,11 @@ export const MediaFileResponseSchema = {
         status: {
             $ref: '#/components/schemas/MediaFileStatus'
         },
+        organized: {
+            type: 'boolean',
+            title: 'Organized',
+            default: false
+        },
         mosaic: {
             anyOf: [
                 {
@@ -5787,6 +5792,54 @@ export const MediaMetadataSchema = {
         'number'
     ],
     title: 'MediaMetadata'
+} as const;
+
+export const MediaOrganizedRequestSchema = {
+    properties: {
+        ids: {
+            items: {
+                type: 'integer'
+            },
+            type: 'array',
+            maxItems: 1000,
+            minItems: 1,
+            title: 'Ids'
+        },
+        organized: {
+            type: 'boolean',
+            title: 'Organized'
+        }
+    },
+    type: 'object',
+    required: [
+        'ids',
+        'organized'
+    ],
+    title: 'MediaOrganizedRequest'
+} as const;
+
+export const MediaOrganizedResponseSchema = {
+    properties: {
+        updated: {
+            type: 'integer',
+            title: 'Updated'
+        },
+        missing: {
+            type: 'integer',
+            title: 'Missing'
+        },
+        skipped: {
+            type: 'integer',
+            title: 'Skipped'
+        }
+    },
+    type: 'object',
+    required: [
+        'updated',
+        'missing',
+        'skipped'
+    ],
+    title: 'MediaOrganizedResponse'
 } as const;
 
 export const MediaServerConfigSchema = {
@@ -6989,6 +7042,12 @@ export const OrganizeSubmissionSchema = {
             default: '',
             'x-path-type': 'directory',
             'x-widget': 'PathPicker'
+        },
+        force: {
+            type: 'boolean',
+            title: 'Force',
+            description: '重新整理已整理文件, 按当前模板调整路径并重写附属文件',
+            default: false
         },
         write_nfo: {
             anyOf: [

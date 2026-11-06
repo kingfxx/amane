@@ -201,6 +201,8 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         )
 
         await finalize_media_file(self._repo, payload.media_file_id, meta.id)
+        if payload.media_file_id is not None:
+            file = await self._repo.get_media_file(payload.media_file_id)
 
         # 为尚未刮削的演员扇出 ACTOR_SCRAPE.
         actor_followups = await actor_scrape_followups(self._repo, self._config, meta.actors)
@@ -257,6 +259,8 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
             return []
         if file is None or file.id is None:
             current().debug("auto organize skipped: media file missing", media_file_id=payload.media_file_id)
+            return []
+        if file.organized:
             return []
         try:
             library = await self._repo.get_library(file.library_id)

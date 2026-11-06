@@ -163,6 +163,7 @@ class OrganizePayload(LibraryBase):
     不含 `recursive` / `patterns`.
     """
 
+    force: bool = Field(default=False, description="重新整理已整理文件, 按当前模板调整路径并重写附属文件")
     write_nfo: bool | None = Field(default=None, description="覆盖 Library.write_nfo; None 沿用库设置")
     copy_resources: list[DownloadableResource] | None = Field(
         default=None, description="覆盖 Library.copy_resources; None 沿用库设置"

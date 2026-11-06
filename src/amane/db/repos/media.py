@@ -3,6 +3,7 @@ from typing import NamedTuple, Unpack
 
 from sqlalchemy import delete as sqla_delete
 from sqlalchemy import func, or_
+from sqlalchemy import update as sqla_update
 from sqlalchemy.sql.functions import count
 from sqlmodel import col, select
 from sqlmodel.sql.expression import SelectOfScalar
@@ -102,6 +103,7 @@ class MediaRepoMixin(RepositoryMixinBase):
         metadata_ids: Sequence[int] | None = None,
         ids: Sequence[int] | None = None,
         *,
+        organized: bool | None = None,
         has_subtitle: bool | None = None,
         mosaic: Mosaic | None = None,
         uncensored: bool | None = None,
@@ -119,6 +121,8 @@ class MediaRepoMixin(RepositoryMixinBase):
                     stmt = stmt.where(col(MediaFile.status).in_(status))
                 if library_id is not None:
                     stmt = stmt.where(col(MediaFile.library_id) == library_id)
+                if organized is not None:
+                    stmt = stmt.where(col(MediaFile.organized).is_(organized))
                 if chunk is not None:
                     stmt = stmt.where(col(MediaFile.id).in_(chunk))
                 if metadata_ids is not None:
@@ -158,6 +162,7 @@ class MediaRepoMixin(RepositoryMixinBase):
         search: str | None = None,
         library_id: int | None = None,
         *,
+        organized: bool | None = None,
         has_subtitle: bool | None = None,
         mosaic: Mosaic | None = None,
         uncensored: bool | None = None,
@@ -170,6 +175,8 @@ class MediaRepoMixin(RepositoryMixinBase):
                 base = base.where(col(MediaFile.status).in_(status))
             if library_id is not None:
                 base = base.where(col(MediaFile.library_id) == library_id)
+            if organized is not None:
+                base = base.where(col(MediaFile.organized).is_(organized))
             if search:
                 pattern = f"%{search}%"
                 base = base.where(or_(col(MediaFile.path).ilike(pattern), col(MediaFile.number).ilike(pattern)))
@@ -192,6 +199,8 @@ class MediaRepoMixin(RepositoryMixinBase):
                 return None
             # 显式赋值, 禁止 setattr; 字段集由 MediaFileUpdates 与 MediaFile 静态对齐.
             if "path" in updates:
+                if nfc_path(updates["path"]) != media.path:
+                    media.organized = False
                 media.path = nfc_path(updates["path"])
                 _apply_path_phase(media)
             if "number" in updates:
@@ -207,7 +216,11 @@ class MediaRepoMixin(RepositoryMixinBase):
             if "status" in updates:
                 media.status = updates["status"]
             if "metadata_id" in updates:
+                if updates["metadata_id"] != media.metadata_id:
+                    media.organized = False
                 media.metadata_id = updates["metadata_id"]
+            if "organized" in updates:
+                media.organized = updates["organized"]
             if "has_external_subtitle" in updates:
                 media.has_external_subtitle = updates["has_external_subtitle"]
             media.updated_at = _utcnow()
@@ -215,6 +228,20 @@ class MediaRepoMixin(RepositoryMixinBase):
             await session.commit()
             await session.refresh(media)
             return media
+
+    async def mark_media_organized(self, media_ids: Sequence[int], organized: bool) -> tuple[int, int]:
+        ids = unique_ids(media_ids)
+        updated = 0
+        async with self._session() as session:
+            for chunk in chunks(ids):
+                result = await session.exec(
+                    sqla_update(MediaFile)
+                    .where(col(MediaFile.id).in_(chunk))
+                    .values(organized=organized, updated_at=_utcnow())
+                )
+                updated += result.rowcount or 0
+            await session.commit()
+        return updated, len(ids) - updated
 
     async def delete_media_file(self, media_id: int) -> bool:
         async with self._session() as session:

@@ -90,6 +90,7 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
                         size=size,
                         number=candidate.metadata.number,
                         status=MediaFileStatus.SCRAPED,
+                        organized=True,
                         has_external_subtitle=has_subtitle,
                     )
                 )

@@ -2730,6 +2730,10 @@ export type MediaFileResponse = {
      */
     number?: string | null;
     status: MediaFileStatus;
+    /**
+     * Organized
+     */
+    organized?: boolean;
     mosaic?: Mosaic | null;
     /**
      * Censored
@@ -2875,6 +2879,38 @@ export type MediaMetadata = {
      * Extrafanart
      */
     extrafanart?: Array<string>;
+};
+
+/**
+ * MediaOrganizedRequest
+ */
+export type MediaOrganizedRequest = {
+    /**
+     * Ids
+     */
+    ids: Array<number>;
+    /**
+     * Organized
+     */
+    organized: boolean;
+};
+
+/**
+ * MediaOrganizedResponse
+ */
+export type MediaOrganizedResponse = {
+    /**
+     * Updated
+     */
+    updated: number;
+    /**
+     * Missing
+     */
+    missing: number;
+    /**
+     * Skipped
+     */
+    skipped: number;
 };
 
 /**
@@ -3544,6 +3580,12 @@ export type OrganizeSubmission = {
      * 要扫描的目录路径 (覆盖 Library 路径, 必须为 Library 子目录).
      */
     path?: string;
+    /**
+     * Force
+     *
+     * 重新整理已整理文件, 按当前模板调整路径并重写附属文件
+     */
+    force?: boolean;
     /**
      * Write Nfo
      *
@@ -6504,6 +6546,12 @@ export type ListMediaData = {
          */
         library_id?: number | null;
         /**
+         * Organized
+         *
+         * Filter by organize marker
+         */
+        organized?: boolean | null;
+        /**
          * Has Subtitle
          *
          * Filter by subtitle marker
@@ -6595,6 +6643,31 @@ export type BatchDeleteMediaResponses = {
 };
 
 export type BatchDeleteMediaResponse = BatchDeleteMediaResponses[keyof BatchDeleteMediaResponses];
+
+export type MarkMediaOrganizedData = {
+    body: MediaOrganizedRequest;
+    path?: never;
+    query?: never;
+    url: '/api/media/batch/organized';
+};
+
+export type MarkMediaOrganizedErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarkMediaOrganizedError = MarkMediaOrganizedErrors[keyof MarkMediaOrganizedErrors];
+
+export type MarkMediaOrganizedResponses = {
+    /**
+     * Successful Response
+     */
+    200: MediaOrganizedResponse;
+};
+
+export type MarkMediaOrganizedResponse = MarkMediaOrganizedResponses[keyof MarkMediaOrganizedResponses];
 
 export type DeleteMediaData = {
     body?: never;

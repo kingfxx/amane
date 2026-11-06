@@ -15,6 +15,7 @@ from ..models import (
     MediaListResponse,
     to_media_file_response,
 )
+from ..models.media import MediaOrganizedRequest, MediaOrganizedResponse
 
 if TYPE_CHECKING:
     from ...db.repo_types import MediaFileUpdates
@@ -45,6 +46,7 @@ async def list_media(
     status: Annotated[MediaFileStatus | None, Query(description="Filter by media file status")] = None,
     search: Annotated[str | None, Query(description="Search by path or number")] = None,
     library_id: Annotated[int | None, Query(description="Filter by owning library")] = None,
+    organized: Annotated[bool | None, Query(description="Filter by organize marker")] = None,
     has_subtitle: Annotated[bool | None, Query(description="Filter by subtitle marker")] = None,
     mosaic: Annotated[Mosaic | None, Query(description="Filter by mosaic marker")] = None,
     uncensored: Annotated[
@@ -67,6 +69,7 @@ async def list_media(
         library_id,
         sort_by,
         order,
+        organized=organized,
         has_subtitle=has_subtitle,
         mosaic=mosaic,
         uncensored=uncensored,
@@ -77,6 +80,7 @@ async def list_media(
         status=status_filter,
         search=search,
         library_id=library_id,
+        organized=organized,
         has_subtitle=has_subtitle,
         mosaic=mosaic,
         uncensored=uncensored,
@@ -92,6 +96,13 @@ async def batch_delete_media(req: MediaBatchDeleteRequest, repo: RepoDep) -> Med
     deleted, missing = await repo.batch_delete_media_files(req.ids)
     logger.info("media files batch deleted", deleted=deleted, missing=missing)
     return MediaBatchDeleteResponse(deleted=deleted, missing=missing)
+
+
+@router.post("/batch/organized")
+async def mark_media_organized(req: MediaOrganizedRequest, repo: RepoDep) -> MediaOrganizedResponse:
+    """只修改整理标记, 不操作媒体目录."""
+    updated, missing = await repo.mark_media_organized(req.ids, req.organized)
+    return MediaOrganizedResponse(updated=updated, missing=missing, skipped=len(req.ids) - len(set(req.ids)))
 
 
 @router.get("/{media_id}")

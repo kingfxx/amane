@@ -18,6 +18,7 @@ class MediaFileResponse(BaseModel):
     codec: str | None = None
     number: str | None = None
     status: MediaFileStatus
+    organized: bool = False
     mosaic: Mosaic | None = None
     censored: bool = False
     uncensored: bool = False
@@ -57,6 +58,17 @@ class MediaBatchDeleteRequest(BaseModel):
 class MediaBatchDeleteResponse(BaseModel):
     deleted: int = Field(description="成功删除的数量")
     missing: int = Field(description="不存在的 id 数量")
+
+
+class MediaOrganizedRequest(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=1000)
+    organized: bool
+
+
+class MediaOrganizedResponse(BaseModel):
+    updated: int
+    missing: int
+    skipped: int
 
 
 if TYPE_CHECKING:

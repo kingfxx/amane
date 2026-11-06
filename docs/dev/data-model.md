@@ -33,6 +33,8 @@ Metadata 列表与 `/media` 文件行的角标与筛选: 有码 / 无码取条�
 
 马赛克性质 (`parsing/file_info.py::MosaicNature`) 是**展示口径**, 不落库: 词表标记优先, 没命中时继承条目类型的有码 / 无码 (HEYZO 等无标记的无码番因此也显示无码), 其余类型为空. 模板占位符 `{mosaic?}` 输出它 (`{content_type}` 输出条目类型), 因此 `censored=` 是合法映射键; 筛选参数与列仍只有标记三个取值.
 
+整理标记独立于刮削状态: `src/amane/db/repos/media.py::MediaRepoMixin.update_media_file` 在路径或影片关联变化时清除, 刮削与模板变更保留; 导入与落盘的写入契约见 [plugins.md](plugins.md) / [task-system.md](task-system.md). 存量文件不依据刮削状态推断已整理, 用户经文件批量操作确认.
+
 ## Library 归属
 
 与 Emby Library 概念对齐: 一个 Library = 一个根目录 + 一组路径模板 + 整理方式 (`move_mode`) + 自动化级别 (`automation`: none / watch / scrape) + 发现通道 (`ingest`: native / clouddrive) + 跳过规则. `automation` 只控制发现侧 (不监控 / 仅登记 / 登记后自动刮削); `ingest=clouddrive` 必填 `cloud_path` 且不挂 watchdog Observer, 契约见 [watcher.md](watcher.md). **自动整理**由库级 `auto_organize` (默认关闭, 与 `automation` 正交) 决定, 触发与次序见 [task-system.md](task-system.md); 关闭时落盘只由手动 ORGANIZE 执行. **库路径在写入时解析为真实路径**, 但值没变就不改写形式: 老库的库根可能还没解析, 而索引行与它同一写法. 索引路径、模板产物与任务范围一律按字面路径比较, 别名与真实路径混用会把同一个文件算成两条索引 — 任务范围仅在该库路径已是真实路径时才跟着规范化.

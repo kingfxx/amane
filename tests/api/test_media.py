@@ -19,6 +19,35 @@ async def _seed_library(repo: Repository) -> None:
 
 
 class TestMediaHttp:
+    @pytest.mark.asyncio
+    async def test_organize_markers(self, client: AsyncClient, repo: Repository) -> None:
+        media = await repo.create_media_file(library_id=1, path="/offline/ABC-123.mp4")
+        assert media.id is not None
+        for organized in (True, False):
+            response = await client.post(
+                "media/batch/organized", json={"ids": [media.id, media.id, 999999], "organized": organized}
+            )
+            assert response.status_code == 200
+            assert response.json() == {"updated": 1, "missing": 1, "skipped": 1}
+            listed = await client.get("media", params={"organized": str(organized).lower()})
+            assert listed.status_code == 200 and listed.json()["total"] == 1
+            assert listed.json()["items"][0]["organized"] is organized
+            assert (await client.get("media", params={"organized": str(not organized).lower()})).json()["total"] == 0
+        for body in (
+            {"ids": [], "organized": True},
+            {"ids": [media.id]},
+            {"ids": [media.id], "organized": None},
+            {"ids": [media.id] * 1001, "organized": True},
+        ):
+            assert (await client.post("media/batch/organized", json=body)).status_code == 422
+        await repo.mark_media_organized([media.id], True)
+        changed = await client.patch(f"media/{media.id}", json={"path": "/changed/ABC-123.mp4"})
+        assert changed.status_code == 200 and changed.json()["organized"] is False
+        await repo.mark_media_organized([media.id], True)
+        meta = await repo.upsert_metadata("ABC-123")
+        changed = await client.patch(f"media/{media.id}", json={"metadata_id": meta.id})
+        assert changed.status_code == 200 and changed.json()["organized"] is False
+
     @pytest.mark.asyncio(loop_scope="function")
     async def test_list_get_update_delete(self, client: AsyncClient, repo: Repository):
         empty = await client.get("media")

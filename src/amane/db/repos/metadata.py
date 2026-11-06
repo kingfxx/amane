@@ -482,6 +482,7 @@ class MetadataRepoMixin(RepositoryMixinBase):
                 indexed.metadata_id = metadata_id
                 indexed.number = item.number
                 indexed.status = item.status
+                indexed.organized = item.organized
                 indexed.has_external_subtitle = item.has_external_subtitle
                 session.add(indexed)
             else:

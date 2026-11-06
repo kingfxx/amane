@@ -128,6 +128,7 @@ async def test_legacy_snapshot_and_task_survive_plugin_update(
     assert meta is not None and meta.id is not None
     files = await repo.get_media_by_metadata_id(meta.id)
     assert len(files) == 1 and files[0].path == str(video) and files[0].has_subtitle
+    assert files[0].organized
     assert len(await resource_store.list_all()) == 1
 
 

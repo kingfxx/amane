@@ -341,6 +341,11 @@ async def test_import_preserves_fields_paths_and_source_files(
     video = directory / "JUR-840-C-破解.mp4"
     video.write_bytes(b"movie")
     lib = await repo.create_library(name="库", path=str(directory))
+    assert lib.id is not None
+    unrelated_path = directory / "JUR-999.mp4"
+    unrelated_path.write_bytes(b"unrelated")
+    unrelated = await repo.create_media_file(lib.id, path=str(unrelated_path))
+    assert unrelated.id is not None
     existing = await repo.upsert_metadata("JUR-840", title="保留标题", plot=None)
     assert existing.id is not None
     await repo.set_metadata_locks(existing.id, [MetadataField.PLOT])
@@ -366,6 +371,9 @@ async def test_import_preserves_fields_paths_and_source_files(
     assert len(await resource_store.list_all()) == 1
     files = await repo.get_media_by_metadata_id(existing.id)
     assert len(files) == 1 and files[0].path == str(video.resolve())
+    assert files[0].organized
+    unchanged_media = await repo.get_media_file(unrelated.id)
+    assert unchanged_media is not None and not unchanged_media.organized
     records = await repo.list_import_records(existing.id)
     assert len(records) == 1 and records[0].local_trailer_paths == [str(trailer.resolve())]
     assert trailer.read_bytes() == b"local preview" and video.read_bytes() == b"movie"
@@ -462,6 +470,7 @@ async def test_import_snapshot_reads_sources_once_and_survives_restart(
     assert meta is not None and meta.id is not None and meta.title == "预览标题"
     files = await repo.get_media_by_metadata_id(meta.id)
     assert len(files) == 1 and files[0].path == str(video) and files[0].size == 5
+    assert files[0].organized
     assert files[0].has_external_subtitle and files[0].mosaic == "cracked"
     assert len(await resource_store.list_all()) == 1
     records = await repo.list_import_records(meta.id)

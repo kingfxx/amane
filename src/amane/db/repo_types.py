@@ -301,6 +301,7 @@ class MetadataFields(TypedDict, total=False):
 
 
 class MediaFileUpdates(TypedDict, total=False):
+    organized: bool
     path: str
     number: str | None
     oshash: str | None

@@ -213,6 +213,7 @@ async def test_organize_subtitle_target_occupied_is_reported(
     updated = await repo.get_media_file(source.id)
     assert updated is not None
     assert updated.path == str(dest)
+    assert not updated.organized
 
 
 @pytest.mark.asyncio(loop_scope="function")
@@ -1257,10 +1258,11 @@ async def test_commit_organized_media_file(repo: Repository, tmp_path: Path, cas
             lib.id, path=str(src), number="NSFS-039", status=MediaFileStatus.SCRAPED, metadata_id=meta.id
         )
         assert media.id is not None
-        await commit_organized_media_file(repo, media, placed, lib_root)
+        await commit_organized_media_file(repo, media, placed, lib_root, organized=True)
         updated = await repo.get_media_file(media.id)
         assert updated is not None
         assert updated.path == str(placed)
+        assert updated.organized
         return
 
     if case == "inside_occupant":
@@ -1275,11 +1277,12 @@ async def test_commit_organized_media_file(repo: Repository, tmp_path: Path, cas
         )
         occupant = await repo.create_media_file(lib.id, path=str(placed), number=None)
         assert media.id is not None and occupant.id is not None
-        await commit_organized_media_file(repo, media, placed, lib_root)
+        await commit_organized_media_file(repo, media, placed, lib_root, organized=True)
         assert await repo.get_media_file(media.id) is None
         kept = await repo.get_media_file(occupant.id)
         assert kept is not None
         assert kept.metadata_id == meta.id
+        assert kept.organized
         assert kept.status == MediaFileStatus.SCRAPED
         assert kept.oshash == "abc"
         assert kept.number == "NSFS-039"

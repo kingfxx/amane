@@ -250,6 +250,8 @@ async def commit_organized_media_file(
     media: MediaFile,
     placed: Path,
     library_root: Path,
+    *,
+    organized: bool = False,
 ) -> None:
     """整理后的路径仍在本库内才改 path; 已离开本库且源路径不在磁盘上则删行.
 
@@ -261,17 +263,19 @@ async def commit_organized_media_file(
     if not is_descendant(placed, library_root):
         if await existing_disk_path(Path(media.path), follow_symlinks=False) is None:
             await repo.delete_media_file(media.id)
+        else:
+            await repo.update_media_file(media.id, organized=organized)
         return
 
     occupant = await repo.get_media_file_by_path(str(placed))
     if occupant is None or occupant.id == media.id:
-        updated = await repo.update_media_file(media.id, path=str(placed))
+        updated = await repo.update_media_file(media.id, path=str(placed), organized=organized)
         if updated is not None and library is not None:
             await refresh_external_subtitle(repo, updated, library)
         return
     if occupant.id is None:
         return
-    occupant_updates: MediaFileUpdates = {}
+    occupant_updates: MediaFileUpdates = {"organized": organized}
     if occupant.metadata_id is None and media.metadata_id is not None:
         occupant_updates["metadata_id"] = media.metadata_id
         occupant_updates["status"] = media.status
@@ -512,6 +516,10 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
         if prune_total:
             await self.report_progress(0, prune_total, "prune")
             for i, mf in enumerate(indexed, start=1):
+                if mf.organized and not payload.force:
+                    skipped += 1
+                    await self.report_progress(i, prune_total, "prune")
+                    continue
                 if mf.id is not None:
                     mf_path = Path(mf.path)
                     missing = await existing_disk_path(mf_path, follow_symlinks=False) is None
@@ -557,6 +565,8 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
 
                 write_nfo = library.write_nfo if payload.write_nfo is None else payload.write_nfo
                 copy_resources = library.copy_resources if payload.copy_resources is None else payload.copy_resources
+                if media_file.id is not None and media_file.organized:
+                    await self._repo.update_media_file(media_file.id, organized=False)
                 fop_result = await apply_file_operations(
                     self._repo,
                     media_file.id,
@@ -575,7 +585,13 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
                     continue
 
                 if fop_result.dest and media_file.id is not None:
-                    await commit_organized_media_file(self._repo, media_file, fop_result.dest, library_root)
+                    await commit_organized_media_file(
+                        self._repo,
+                        media_file,
+                        fop_result.dest,
+                        library_root,
+                        organized=fop_result.outcome is PlaceOutcome.PLACED and not fop_result.subtitle_conflicts,
+                    )
                 match fop_result.outcome:
                     case PlaceOutcome.PLACED:
                         organized += 1
