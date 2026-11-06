@@ -43,7 +43,7 @@ export function ImportPanel({
   const [page, setPage] = useState(1);
   const [previewProgress, setPreviewProgress] = useState<Pick<
     ImportPreviewProgress,
-    "processed" | "total" | "current_path"
+    "processed" | "total" | "current_path" | "plugin_progress" | "discovering"
   > | null>(null);
   const selectedPaths = new Set(selected);
   const libraries = useQuery({ ...listLibrariesOptions(), enabled: opened });
@@ -60,10 +60,13 @@ export function ImportPanel({
       const data: ImportPreviewResponse = { root: "", items: [] };
       let complete = false;
       for await (const event of result.stream) {
+        if (event.error) throw new Error(event.error);
         setPreviewProgress({
           processed: event.processed,
           total: event.total,
           current_path: event.current_path,
+          plugin_progress: event.plugin_progress,
+          discovering: event.discovering,
         });
         data.root = event.root;
         if (event.item) data.items.push(event.item);
@@ -188,7 +191,7 @@ export function ImportPanel({
         {inspect.isPending || previewProgress ? (
           <Stack gap="xs" role="status" aria-live="polite">
             <Text size="sm">
-              {previewProgress
+              {previewProgress && !previewProgress.discovering
                 ? t("import.previewProgress", previewProgress)
                 : t("import.discovering")}
             </Text>
@@ -199,7 +202,7 @@ export function ImportPanel({
                   : null}
               </Text>
             ) : null}
-            {previewProgress ? (
+            {previewProgress && !previewProgress.discovering ? (
               <Progress
                 value={
                   previewProgress.total === 0
@@ -207,6 +210,15 @@ export function ImportPanel({
                     : (previewProgress.processed / previewProgress.total) * 100
                 }
               />
+            ) : null}
+            {previewProgress?.plugin_progress ? (
+              <Text size="xs" c="dimmed">
+                {t("import.phaseProgress", {
+                  phase: t(`import.phases.${previewProgress.plugin_progress.phase}`),
+                  processed: previewProgress.plugin_progress.processed,
+                  total: previewProgress.plugin_progress.total ?? "…",
+                })}
+              </Text>
             ) : null}
           </Stack>
         ) : null}

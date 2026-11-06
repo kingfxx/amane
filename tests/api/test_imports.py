@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable, Sequence
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
@@ -6,11 +7,15 @@ from zipfile import ZipFile
 import pytest
 from httpx2 import AsyncClient
 
-from amane.api.routes.imports import ImportPreviewProgress
+from amane.api.routes.imports import ImportPreviewProgress, _PreviewUpdates
+from amane.plugins.api import ImportProvider
+from amane.plugins.import_models import ImportProgress
 
 
 @pytest.mark.asyncio
-async def test_import_api_install_preview_execute_and_errors(client: AsyncClient, tmp_path: Path) -> None:
+async def test_import_api_install_preview_execute_and_errors(
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     archive = BytesIO()
     with ZipFile(archive, "w") as target:
         target.write(Path(__file__).resolve().parents[2] / "extensions/nfo-import/plugin.py", "plugin.py")
@@ -33,14 +38,14 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
         for line in streamed.text.splitlines()
         if line.startswith("data: ")
     ]
-    assert [(event.processed, event.total, event.complete) for event in events] == [
-        (0, 2, False),
-        (0, 2, False),
-        (1, 2, False),
-        (1, 2, False),
-        (2, 2, False),
-        (2, 2, True),
-    ]
+    assert events[0].processed == 0 and events[-1].processed == 2 and events[-1].complete
+    assert all(event.total == 2 for event in events if not event.discovering)
+    assert [event.processed for event in events if event.item is not None] == [1, 2]
+    assert {event.plugin_progress.phase for event in events if event.plugin_progress is not None} >= {
+        "discover",
+        "read",
+        "cache",
+    }
     results = {Path(event.item.path).name: event.item for event in events if event.item is not None}
     assert results["JUR-840.nfo"].candidate is not None
     assert results["JUR-840.nfo"].candidate.metadata.number == "JUR-840"
@@ -53,7 +58,29 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
         for line in empty_stream.text.splitlines()
         if line.startswith("data: ")
     ]
-    assert [(event.total, event.processed, event.complete) for event in empty_events] == [(0, 0, False), (0, 0, True)]
+    assert all(event.total == event.processed == 0 and event.item is None for event in empty_events)
+    assert empty_events[-1].complete
+
+    async def unavailable(
+        provider: ImportProvider,
+        root: Path,
+        recursive: bool,
+        safe_dirs: Sequence[Path] | None,
+        report: Callable[[ImportProgress], None] | None = None,
+    ) -> tuple[Path, ...]:
+        raise OSError("挂载目录不可用")
+
+    with monkeypatch.context() as patch:
+        patch.setattr("amane.api.routes.imports.discover_imports", unavailable)
+        failed = await client.post("imports/preview-stream", json=request)
+    assert failed.status_code == 200
+    failed_events = [
+        ImportPreviewProgress.model_validate_json(line.removeprefix("data: "))
+        for line in failed.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert failed_events[-1].error == "挂载目录不可用"
+    assert all(not event.complete and event.item is None for event in failed_events)
     body = {
         "items": [
             {
@@ -98,3 +125,34 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     assert (await client.patch("plugins/local.nfo", json={"enabled": False})).status_code == 200
     assert (await client.post("imports/preview", json=request)).status_code == 422
     assert (await client.post("imports/preview-stream", json=request)).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_preview_progress_cancels_unfinished_work() -> None:
+    updates = _PreviewUpdates()
+    stopped = asyncio.Event()
+    gate = asyncio.Event()
+
+    async def work() -> int:
+        try:
+            updates.report(ImportProgress(phase="cache", processed=1, total=2))
+            await gate.wait()
+            return 2
+        finally:
+            stopped.set()
+
+    stream = updates.follow(work())
+    first = await anext(stream)
+    assert isinstance(first, ImportProgress) and first.processed == 1
+    assert not stopped.is_set()
+    await stream.aclose()
+    assert stopped.is_set()
+    with pytest.raises(asyncio.CancelledError):
+        updates.report(ImportProgress(phase="cache", processed=2, total=2))
+
+    async def failed() -> int:
+        raise ValueError("准备失败")
+
+    with pytest.raises(ValueError, match="准备失败"):
+        async for _ in _PreviewUpdates().follow(failed()):
+            pass

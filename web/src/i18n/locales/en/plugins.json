@@ -38,7 +38,14 @@
     "preview": "Preview import",
     "discovering": "Discovering importable files…",
     "previewProgress": "Previewed {{processed}} / {{total}} files",
-    "caching": "Reading and caching metadata and images: {{path}}",
+    "caching": "Preparing import: {{path}}",
+    "phaseProgress": "{{phase}}: {{processed}} / {{total}}",
+    "phases": {
+      "discover": "Discovering files",
+      "read": "Reading source",
+      "cache": "Caching resources",
+      "restore": "Restoring snapshot"
+    },
     "previewInterrupted": "Preview connection interrupted. Please preview again.",
     "previewRequired": "Preview the import first",
     "failed": "Import request failed",

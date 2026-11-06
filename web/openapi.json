@@ -10695,6 +10695,32 @@
               }
             ],
             "title": "Current Path"
+          },
+          "plugin_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discovering": {
+            "type": "boolean",
+            "title": "Discovering",
+            "default": false
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
           }
         },
         "type": "object",
@@ -10748,6 +10774,43 @@
           "items"
         ],
         "title": "ImportPreviewResponse"
+      },
+      "ImportProgress": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "discover",
+              "read",
+              "cache",
+              "restore"
+            ],
+            "title": "Phase"
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Processed"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phase",
+          "processed"
+        ],
+        "title": "ImportProgress"
       },
       "ImportRecordResponse": {
         "properties": {

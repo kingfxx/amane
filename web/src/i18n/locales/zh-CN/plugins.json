@@ -38,7 +38,14 @@
     "preview": "预览导入",
     "discovering": "正在发现可导入文件…",
     "previewProgress": "已预览 {{processed}} / {{total}} 个文件",
-    "caching": "正在读取并缓存 NFO 与图片: {{path}}",
+    "caching": "正在准备导入: {{path}}",
+    "phaseProgress": "{{phase}}: {{processed}} / {{total}}",
+    "phases": {
+      "discover": "发现文件",
+      "read": "读取来源",
+      "cache": "缓存资源",
+      "restore": "恢复快照"
+    },
     "previewInterrupted": "预览连接中断, 请重新预览",
     "previewRequired": "请先预览导入内容",
     "failed": "导入请求失败",

@@ -19,13 +19,6 @@ from amane.plugins.manager import PluginManager
 from amane.plugins.packaging import load_plugin
 
 
-@pytest.fixture
-def nfo_provider() -> ImportProvider:
-    loaded = load_plugin("local.nfo", Path(__file__).resolve().parents[2] / "extensions/nfo-import")
-    assert isinstance(loaded.plugin, ImportPlugin)
-    return loaded.plugin.build_importer(loaded.plugin.configuration_model()())
-
-
 @pytest.mark.asyncio
 async def test_discover_large_nfo_directory(nfo_provider: ImportProvider, tmp_path: Path) -> None:
     nested = tmp_path / "nested"
@@ -326,9 +319,10 @@ async def test_import_snapshot_reads_sources_once_and_survives_restart(
 
     monkeypatch.setattr(Path, "open", track_open)
     staged = await cache.stage(nfo_provider, "local.nfo", source, directory, [directory])
+    assert staged.cache_id is not None
     assert reads.count(source) == 1 and reads.count(image) == 1 and video not in reads
     assert staged.snapshot.candidate.source_bytes is None
-    cached_source = cache.root / staged.cache_id / staged.snapshot.source_file
+    cached_source = cache.root / staged.cache_id / "source.nfo"
     assert cached_source.read_text(encoding="utf-8") == original
     # 来源目录不可访问时, 新实例和任务重试仍只使用本地快照.
     directory.rename(tmp_path / "offline")
@@ -369,6 +363,7 @@ async def test_import_cache_validation_and_cleanup(
     source.write_text("<movie><num>ABC-123</num></movie>", encoding="utf-8")
     cache = ImportCache(tmp_path / "data")
     staged = await cache.stage(nfo_provider, "local.nfo", source, tmp_path, [tmp_path])
+    assert staged.cache_id is not None
     digest = staged.snapshot.candidate.source_hash
     for cache_id, source_id, root, source_path, source_hash, roots, error, message in (
         ("../outside", "local.nfo", str(tmp_path), str(source), digest, [tmp_path], ValueError, "标识无效"),
@@ -378,14 +373,15 @@ async def test_import_cache_validation_and_cleanup(
         (staged.cache_id, "local.nfo", str(tmp_path), str(source), digest, [], PermissionError, "安全目录"),
     ):
         with pytest.raises(error, match=message):
-            await cache.load(cache_id, source_id, root, source_path, source_hash, roots)
-    cached_source = cache.root / staged.cache_id / staged.snapshot.source_file
+            await cache.load(cache_id, source_id, root, source_path, source_hash, roots, nfo_provider)
+    cached_source = cache.root / staged.cache_id / "source.nfo"
     cached_source.write_text("changed", encoding="utf-8")
     with pytest.raises(ValueError, match="来源内容无效"):
-        await cache.load(staged.cache_id, "local.nfo", str(tmp_path), str(source), digest, [tmp_path])
+        await cache.load(staged.cache_id, "local.nfo", str(tmp_path), str(source), digest, [tmp_path], nfo_provider)
     expected: dict[str, bool] = {staged.cache_id: False}
-    for status in ("queued", "failed", "done"):
+    for status in ("running", "queued", "failed", "done"):
         entry = await cache.stage(nfo_provider, "local.nfo", source, tmp_path, [tmp_path])
+        assert entry.cache_id is not None
         task = await repo.create_task(
             TaskType.PLUGIN_IMPORT,
             PluginImportPayload(
@@ -397,7 +393,10 @@ async def test_import_cache_validation_and_cleanup(
             ),
         )
         assert task.id is not None
-        if status == "failed":
+        if status == "running":
+            claimed = await repo.claim_next_task()
+            assert claimed is not None and claimed.id == task.id
+        elif status == "failed":
             await repo.fail_task(task.id, "retry")
         elif status == "done":
             await repo.complete_task(task.id)

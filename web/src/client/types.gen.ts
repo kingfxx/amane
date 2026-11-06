@@ -1985,6 +1985,15 @@ export type ImportPreviewProgress = {
      * Current Path
      */
     current_path?: string | null;
+    plugin_progress?: ImportProgress | null;
+    /**
+     * Discovering
+     */
+    discovering?: boolean;
+    /**
+     * Error
+     */
+    error?: string | null;
 };
 
 /**
@@ -2017,6 +2026,24 @@ export type ImportPreviewResponse = {
      * Items
      */
     items: Array<ImportPreviewItem>;
+};
+
+/**
+ * ImportProgress
+ */
+export type ImportProgress = {
+    /**
+     * Phase
+     */
+    phase: 'discover' | 'read' | 'cache' | 'restore';
+    /**
+     * Processed
+     */
+    processed: number;
+    /**
+     * Total
+     */
+    total?: number | null;
 };
 
 /**

@@ -3924,6 +3924,32 @@ export const ImportPreviewProgressSchema = {
                 }
             ],
             title: 'Current Path'
+        },
+        plugin_progress: {
+            anyOf: [
+                {
+                    $ref: '#/components/schemas/ImportProgress'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        discovering: {
+            type: 'boolean',
+            title: 'Discovering',
+            default: false
+        },
+        error: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Error'
         }
     },
     type: 'object',
@@ -3979,6 +4005,44 @@ export const ImportPreviewResponseSchema = {
         'items'
     ],
     title: 'ImportPreviewResponse'
+} as const;
+
+export const ImportProgressSchema = {
+    properties: {
+        phase: {
+            type: 'string',
+            enum: [
+                'discover',
+                'read',
+                'cache',
+                'restore'
+            ],
+            title: 'Phase'
+        },
+        processed: {
+            type: 'integer',
+            minimum: 0,
+            title: 'Processed'
+        },
+        total: {
+            anyOf: [
+                {
+                    type: 'integer',
+                    minimum: 0
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Total'
+        }
+    },
+    type: 'object',
+    required: [
+        'phase',
+        'processed'
+    ],
+    title: 'ImportProgress'
 } as const;
 
 export const ImportRecordResponseSchema = {

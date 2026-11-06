@@ -153,7 +153,7 @@ def test_plugin_manager_discovers_dropins(tmp_path: Path) -> None:
     assert Path(origin.path).name == "acme.fake"
     names = {failure.name for failure in manager.failures}
     assert names == {"acme.broken", "acme.old", "fakesource", "plugin.squat"}
-    assert any("FilmSourcePlugin or PlaybackPlugin" in failure.error for failure in manager.failures)
+    assert any("FilmSourcePlugin, PlaybackPlugin or ImportPlugin" in failure.error for failure in manager.failures)
     assert any("unsupported plugin API version" in failure.error for failure in manager.failures)
     assert any("namespace.local" in failure.error for failure in manager.failures)
     assert any("reserved" in failure.error for failure in manager.failures)

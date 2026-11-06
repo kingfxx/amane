@@ -1,76 +1,70 @@
-"""预览快照持久化; 来源路径保留原值, 图片副本仅供导入任务读取."""
+"""通用缓存授权、就绪标记与任务引用保护; 快照内容由插件管理."""
 
 import asyncio
-import hashlib
 import os
 import shutil
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from ..db.models import TaskStatus, TaskType
 from ..db.repository import Repository
 from ..utils.path import nfc_path
 from ..utils.threads import in_thread
-from .api import ImportProvider
-from .import_models import ImportCandidate, ImportImage
-from .importing import read_import
-
-
-class CachedMedia(BaseModel):
-    path: str
-    size: int
-    subtitle_extensions: list[str]
-
-
-class CachedImport(BaseModel):
-    source_id: str
-    root: str
-    candidate: ImportCandidate
-    images: list[ImportImage]
-    media: list[CachedMedia]
-    source_file: str
+from .api import ImportProvider, SnapshotImportProvider
+from .import_models import ImportContext, ImportProgress, PreparedImport
+from .importing import _checked, read_import, validate_import_candidate
+from .legacy_import_cache import read_legacy_snapshot
 
 
 class ImportSnapshot(BaseModel):
-    cache_id: str = Field(pattern=r"^[0-9a-f]{32}$")
-    snapshot: CachedImport
+    cache_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    snapshot: PreparedImport
 
 
-def _within(path: Path, root: Path) -> bool:
-    return path.is_relative_to(root)
+class _CacheEntry(BaseModel):
+    version: Literal[2] = 2
+    source_id: str
+    root: str
+    source_path: str
+    source_hash: str
 
 
-def _authorize(root: Path, path: Path, safe_dirs: Sequence[Path] | None) -> None:
-    if not root.is_absolute() or not path.is_absolute() or ".." in (*root.parts, *path.parts):
-        raise PermissionError("导入快照路径必须是规范的绝对路径")
-    if not _within(path, root):
-        raise PermissionError("导入文件超出所选目录")
-    if safe_dirs is not None and not any(_within(path, directory) for directory in safe_dirs):
-        raise PermissionError("导入文件不在允许的安全目录内")
+def _validate_prepared(prepared: PreparedImport, context: ImportContext, safe_dirs: Sequence[Path] | None) -> None:
+    validate_import_candidate(prepared.candidate, context.source, context.root, safe_dirs, require_exists=False)
+    paths = {nfc_path(path) for path in prepared.candidate.media_paths}
+    if {item.path for item in prepared.media} != paths or len(prepared.media) != len(paths):
+        raise ValueError("快照媒体信息与候选路径不匹配")
+    for image in prepared.images:
+        path = Path(image.path).resolve()
+        if not path.is_relative_to(context.cache_dir) or not path.is_file():
+            raise ValueError("预览缓存图片缺失或路径无效, 请重新预览")
+        image.path = str(path)
 
 
-def _copy_image(source: Path, dest: Path) -> None:
-    with source.open("rb") as stream:
-        data = stream.read(32 * 1024 * 1024 + 1)
-    if len(data) > 32 * 1024 * 1024:
-        raise ValueError("导入图片超过 32 MiB")
-    dest.write_bytes(data)
+def _ignore_progress(progress: ImportProgress) -> None:
+    pass
 
 
 class ImportCache:
     def __init__(self, data_dir: Path) -> None:
         self.root = (data_dir / "import-cache").resolve()
-        # 提交和清理共用锁, 避免缓存刚被任务引用就被清理.
         self.lock = asyncio.Lock()
 
     async def stage(
-        self, provider: ImportProvider, source_id: str, source: Path, root: Path, safe_dirs: Sequence[Path] | None
+        self,
+        provider: ImportProvider,
+        source_id: str,
+        source: Path,
+        root: Path,
+        safe_dirs: Sequence[Path] | None,
+        report: Callable[[ImportProgress], None] = _ignore_progress,
     ) -> ImportSnapshot:
-        return await self._stage(self.root, provider, source_id, source, root, safe_dirs)
+        return await self._stage(self.root, provider, source_id, source, root, safe_dirs, report)
 
     @staticmethod
     @in_thread
@@ -81,60 +75,27 @@ class ImportCache:
         source: Path,
         root: Path,
         safe_dirs: Sequence[Path] | None,
+        report: Callable[[ImportProgress], None],
     ) -> ImportSnapshot:
-        candidate = read_import.sync(provider, source, root, safe_dirs)
-        source_data = candidate.source_bytes
-        if source_data is None:
-            # 兼容未返回原文的导入插件; 支持原文的插件只读取一次来源文件.
-            with Path(candidate.source_path).open("rb") as stream:
-                source_data = stream.read(16 * 1024 * 1024 + 1)
-            if len(source_data) > 16 * 1024 * 1024:
-                raise ValueError("导入来源文件超过 16 MiB")
-        if hashlib.sha256(source_data).hexdigest() != candidate.source_hash:
-            raise ValueError("来源文件在缓存时发生变化, 请重新预览")
-        candidate.source_bytes = None
-        cache_id = uuid4().hex
-        directory = cache_root / cache_id
+        if not isinstance(provider, SnapshotImportProvider):
+            candidate = read_import.sync(provider, source, root, safe_dirs)
+            return ImportSnapshot(snapshot=PreparedImport(candidate=candidate, images=candidate.images, media=[]))
+        source = _checked(source, root, safe_dirs)
+        directory = cache_root / uuid4().hex
         directory.mkdir(parents=True)
+        context = ImportContext(root=root, source=source, cache_dir=directory)
         try:
-            source_file = f"source{source.suffix}"
-            (directory / source_file).write_bytes(source_data)
-            images: list[ImportImage] = []
-            copied: dict[str, str] = {}
-            for image in candidate.images:
-                name = copied.get(image.path)
-                if name is None:
-                    name = f"image-{len(copied)}{Path(image.path).suffix}"
-                    _copy_image(Path(image.path), directory / name)
-                    copied[image.path] = name
-                images.append(ImportImage(kind=image.kind, path=name))
-            subtitle_extensions: dict[Path, list[str]] = {}
-            media: list[CachedMedia] = []
-            for value in candidate.media_paths:
-                path = Path(value)
-                if path.parent not in subtitle_extensions:
-                    subtitle_extensions[path.parent] = sorted(
-                        {item.suffix.lower() for item in path.parent.iterdir() if item.is_file()}
-                    )
-                media.append(
-                    CachedMedia(
-                        path=nfc_path(value),
-                        size=path.stat().st_size,
-                        subtitle_extensions=subtitle_extensions[path.parent],
-                    )
-                )
-            snapshot = CachedImport(
-                source_id=source_id,
-                root=str(root),
-                candidate=candidate,
-                images=images,
-                media=media,
-                source_file=source_file,
+            prepared = provider.prepare(context, report)
+            validate_import_candidate(prepared.candidate, source, root, safe_dirs)
+            _validate_prepared(prepared, context, safe_dirs)
+            entry = _CacheEntry(
+                source_id=source_id, root=str(root), source_path=str(source), source_hash=prepared.candidate.source_hash
             )
-            (directory / "snapshot.json").write_text(snapshot.model_dump_json(), encoding="utf-8")
-            return ImportSnapshot(cache_id=cache_id, snapshot=snapshot)
+            pending = directory / "entry.pending"
+            pending.write_text(entry.model_dump_json(), encoding="utf-8")
+            pending.replace(directory / "entry.json")
+            return ImportSnapshot(cache_id=directory.name, snapshot=prepared)
         except BaseException:
-            # 目录由本次调用创建, 删除边界固定在缓存根内.
             if directory.resolve().parent == cache_root:
                 shutil.rmtree(directory)
             raise
@@ -147,8 +108,9 @@ class ImportCache:
         source_path: str,
         source_hash: str,
         safe_dirs: Sequence[Path] | None,
-    ) -> CachedImport:
-        return await self._load(self.root, cache_id, source_id, root, source_path, source_hash, safe_dirs)
+        provider: ImportProvider | None = None,
+    ) -> PreparedImport:
+        return await self._load(self.root, cache_id, source_id, root, source_path, source_hash, safe_dirs, provider)
 
     @staticmethod
     @in_thread
@@ -160,35 +122,46 @@ class ImportCache:
         source_path: str,
         source_hash: str,
         safe_dirs: Sequence[Path] | None,
-    ) -> CachedImport:
+        provider: ImportProvider | None,
+    ) -> PreparedImport:
         if len(cache_id) != 32 or any(char not in "0123456789abcdef" for char in cache_id):
             raise ValueError("预览缓存标识无效")
         directory = cache_root / cache_id
         if directory.resolve().parent != cache_root:
             raise PermissionError("预览缓存超出缓存目录")
+        context = ImportContext(root=Path(root), source=Path(source_path), cache_dir=directory)
         try:
-            snapshot = CachedImport.model_validate_json((directory / "snapshot.json").read_text(encoding="utf-8"))
-            candidate = snapshot.candidate
-            if (snapshot.source_id, snapshot.root, candidate.source_path, candidate.source_hash) != (
-                source_id,
-                root,
-                source_path,
-                source_hash,
-            ):
-                raise ValueError("预览缓存与提交内容不匹配, 请重新预览")
-            _authorize(Path(snapshot.root), Path(candidate.source_path), safe_dirs)
-            for media in snapshot.media:
-                _authorize(Path(snapshot.root), Path(media.path), safe_dirs)
-            for image in snapshot.images:
-                path = (directory / image.path).resolve()
-                if not path.is_relative_to(directory) or not path.is_file():
-                    raise ValueError("预览缓存图片缺失或路径无效, 请重新预览")
-                image.path = str(path)
-            source = (directory / snapshot.source_file).resolve()
-            if not source.is_relative_to(directory) or hashlib.sha256(source.read_bytes()).hexdigest() != source_hash:
-                raise ValueError("预览缓存来源内容无效, 请重新预览")
+            if (directory / "entry.json").is_file():
+                try:
+                    entry = _CacheEntry.model_validate_json((directory / "entry.json").read_text(encoding="utf-8"))
+                except ValidationError as exc:
+                    raise ValueError("缓存记录版本或格式不兼容, 请重新预览") from exc
+                if (entry.source_id, entry.root, entry.source_path, entry.source_hash) != (
+                    source_id,
+                    root,
+                    source_path,
+                    source_hash,
+                ):
+                    raise ValueError("预览缓存与提交内容不匹配, 请重新预览")
+                if not isinstance(provider, SnapshotImportProvider):
+                    raise ValueError("当前插件不支持恢复此快照, 请安装兼容版本")
+                _checked(context.source, context.root, safe_dirs, require_exists=False)
+                prepared = provider.restore(context)
+            else:
+                legacy = read_legacy_snapshot(directory)
+                if (legacy.source_id, legacy.root, legacy.candidate.source_path, legacy.candidate.source_hash) != (
+                    source_id,
+                    root,
+                    source_path,
+                    source_hash,
+                ):
+                    raise ValueError("预览缓存与提交内容不匹配, 请重新预览")
+                prepared = legacy
+            if prepared.candidate.source_hash != source_hash:
+                raise ValueError("快照来源散列与提交内容不匹配")
+            _validate_prepared(prepared, context, safe_dirs)
             os.utime(directory)
-            return snapshot
+            return prepared
         except PermissionError:
             raise
         except OSError as exc:
@@ -223,8 +196,5 @@ class ImportCache:
         for directory in cache_root.iterdir():
             if directory.name in protected or directory.is_symlink() or not directory.is_dir():
                 continue
-            if directory.stat().st_mtime >= cutoff:
-                continue
-            # 仅删除缓存根的真实直接子目录.
-            if directory.resolve().parent == cache_root:
+            if directory.stat().st_mtime < cutoff and directory.resolve().parent == cache_root:
                 shutil.rmtree(directory)

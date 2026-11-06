@@ -60,6 +60,7 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
                     payload.source_path,
                     payload.source_hash,
                     self._safe_dirs,
+                    provider,
                 )
             candidate = snapshot.candidate
         else:

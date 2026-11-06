@@ -54,7 +54,7 @@ OpenAPI 列出参数, 不表达组合语义:
 - `/metadata` 的语义参数: `semantic_query` 出现时接管排序, 整句只编码一次, 封面与剧照共用一次点积; 候选集来自同一套筛选 (含 `search` 与 `saved_query_id`), 无筛选时扫全索引. `semantic_kind=all|cover|still` 选参与排名的图片来源; `sort_by` / `order` 被忽略, `offset` / `limit` (上限 200) 直接分页, `total` 是候选条目总数 (按条目去重). `items` 仍是 `MetadataResponse`, 命中图放在并列的 `semantic_hits` (`id` / `kind` / `resource_url` / `similarity`), 同一条目只保留名次最高的那张图; `similarity` 只在同一次查询内可比, 不设阈值; 同分按条目 id 升序, 翻页稳定. 模型未就绪时仅该参数出现时 503; 索引生命周期见 [semantic.md](semantic.md).
 - `/files`: 路径解析为非严格 (虚拟 / 网络挂载盘无法规范化查询时按字面兜底), 相对 `path` 经 `base` 参数解析 (缺省 = 首个安全目录). 响应含规范 `path` (resolve 后的绝对路径), 前端文件浏览器以它为面包屑的唯一权威形态, 不做分段拼接.
 
-导入预览见 `routes/imports.py::preview_import_stream`: 发现清单后逐文件缓存并发送 SSE, 读取失败也计入进度; 结束标记确认完整结果. `web/src/components/plugins/import-panel.tsx::ImportPanel` 禁止自动重连重跑, 连接中断须重新预览后才能提交; 缓存由主机生成, 界面不提交解析结果或缓存路径, 契约见 [plugins.md](plugins.md).
+导入预览见 `src/amane/api/routes/imports.py::preview_import_stream`: 插件发现和准备进度经 SSE 传输, 单文件失败也计入进度; 发现失败发送错误并终止, 结束标记确认完整结果. 连接取消停止后续文件处理. `web/src/components/plugins/import-panel.tsx::ImportPanel` 禁止自动重连重跑, 连接中断须重新预览后才能提交; 界面只提交主机确认的缓存引用, 契约见 [plugins.md](plugins.md).
 
 ## 依赖注入
 

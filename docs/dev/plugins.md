@@ -7,9 +7,11 @@
 
 插件 API v1 开放**影片元数据来源**、**播放源**与**元数据导入**. 共用 `{cold.data_dir}/plugins/sources/<id>/` 与 HotSettings `plugins.<id>` 信封; 调用路径与输入输出分离. 插件不直接访问 Repository、任务 Worker、FastAPI 或前端运行时.
 
-导入契约 v2 的提供者必须继承 `plugins/api.py::SnapshotImportProvider`, 使用主机分配的 `ImportContext` 准备和恢复快照, 并通过 `ImportProgress` 报告进度; v1 提供者继续使用 `discover` / `read`, 两者不改变来源与播放 API 版本.
+导入契约 v2 的提供者继承 `src/amane/plugins/api.py::SnapshotImportProvider`, 使用主机分配的上下文准备和恢复快照, 并报告发现、读取及缓存进度; v1 提供者继续发现和读取候选, 不改变来源与播放 API 版本. 安装校验共用 `src/amane/plugins/packaging.py::_require_matching_capabilities`.
 
-导入契约 v1 (`ImportPlugin.import_api_version`) 独立于来源 API; 安装校验共用 `plugins/packaging.py::_require_matching_capabilities`. `plugins/importing.py` 在线程池读取候选并校验来源目录边界; 格式规则只在插件中实现. 插件可随候选返回原文字节供主机缓存, 原文不经 HTTP 返回. `plugins/import_cache.py::ImportCache` 在 `{data_dir}/import-cache` 保存预览快照, 提交与任务执行只读取本地副本; 正片路径、大小及字幕扩展名在预览时确定, 不复制正片或本地预览片, 关联仍使用原路径. 无缓存标识的任务维持来源重读与散列校验. 缓存跨重启保留; 启动与预览前清理超过七天且未被排队、运行、失败任务引用的快照. 提交和清理共用会话级锁, 热重建必须复用同一实例.
+`src/amane/plugins/importing.py` 在线程池调用提供者并校验来源目录边界. v2 插件管理快照格式和内容, 恢复只访问分配的缓存目录; `src/amane/plugins/import_cache.py::ImportCache` 管理 `{data_dir}/import-cache` 的授权、就绪标记及任务引用, 不复制来源内容. v1 提供者不创建新快照; 无缓存标识的任务维持来源重读与散列校验, 已有主机快照由 `src/amane/plugins/legacy_import_cache.py::read_legacy_snapshot` 只读恢复. 视频关联使用原路径及预览时属性, 不复制视频内容.
+
+缓存跨重启保留; 启动与预览前清理超过七天且未被排队、运行、失败任务引用的快照. 提交和清理共用会话级锁, 热重建复用同一实例; 认领不改变引用保护. 缓存缺失或不兼容禁止自动重新下载来源文件.
 
 发现不限制总量; `web/src/components/plugins/import-panel.tsx::ImportPanel` 分页预览、按接口上限分批提交, 成功批次取消选中. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一事务写入字段、正片关联与导入记录. 默认补充空字段, 覆盖只写非空值, 均遵守字段锁. `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须处理其归属. 图片按内容复制, 预告片保留远程链接. 导入禁止派生刮削与整理任务.
 
