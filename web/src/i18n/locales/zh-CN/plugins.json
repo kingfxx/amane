@@ -30,7 +30,7 @@
   },
   "import": {
     "title": "导入本地元数据",
-    "hint": "图片复制到 Amane; 预告片保留远程链接, 本地预览片只保存路径. 默认只补充空字段, 不触发刮削或整理.",
+    "hint": "预览将来源文件与本地图片缓存到 Amane 数据目录, 导入使用预览快照. 视频和本地预览片只保存原路径. 默认只补充空字段, 不触发刮削或整理.",
     "path": "服务器目录",
     "recursive": "包含子目录",
     "library": "关联正片的媒体库 (可选)",
@@ -38,6 +38,7 @@
     "preview": "预览导入",
     "discovering": "正在发现可导入文件…",
     "previewProgress": "已预览 {{processed}} / {{total}} 个文件",
+    "caching": "正在读取并缓存 NFO 与图片: {{path}}",
     "previewInterrupted": "预览连接中断, 请重新预览",
     "previewRequired": "请先预览导入内容",
     "failed": "导入请求失败",

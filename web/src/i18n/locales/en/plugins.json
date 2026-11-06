@@ -30,7 +30,7 @@
   },
   "import": {
     "title": "Import local metadata",
-    "hint": "Images are copied to Amane. Remote trailer links are preserved; local trailer paths are recorded without copying. Only empty, unlocked fields are filled. No scraping or organizing is started.",
+    "hint": "Preview caches source files and local images in Amane's data directory. Import uses this snapshot. Videos and local trailers keep their original paths. Only empty, unlocked fields are filled; no scraping or organizing is started.",
     "path": "Server directory",
     "recursive": "Include subdirectories",
     "library": "Library for associated videos (optional)",
@@ -38,6 +38,7 @@
     "preview": "Preview import",
     "discovering": "Discovering importable files…",
     "previewProgress": "Previewed {{processed}} / {{total}} files",
+    "caching": "Reading and caching metadata and images: {{path}}",
     "previewInterrupted": "Preview connection interrupted. Please preview again.",
     "previewRequired": "Preview the import first",
     "failed": "Import request failed",

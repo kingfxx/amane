@@ -35,6 +35,8 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     ]
     assert [(event.processed, event.total, event.complete) for event in events] == [
         (0, 2, False),
+        (0, 2, False),
+        (1, 2, False),
         (1, 2, False),
         (2, 2, False),
         (2, 2, True),
@@ -59,6 +61,7 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
                 "root": str(directory),
                 "source_path": str(source),
                 "source_hash": candidate["source_hash"],
+                "cache_id": preview.json()["items"][0]["cache_id"],
                 "overwrite_existing": True,
             }
         ]
@@ -78,7 +81,11 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     records = await client.get(f"imports/{metadata_id}/records")
     assert records.status_code == 200 and records.json()[0]["source_path"] == str(source.resolve())
     source.write_text("<movie><num>JUR-840</num><title>变化</title></movie>", encoding="utf-8")
-    assert (await client.post("imports/execute", json=body)).status_code == 409
+    assert (await client.post("imports/execute", json=body)).status_code == 202
+    legacy = {**body["items"][0], "cache_id": None}
+    assert (await client.post("imports/execute", json={"items": [legacy]})).status_code == 409
+    mismatch = {**body["items"][0], "source_hash": "0" * 64}
+    assert (await client.post("imports/execute", json={"items": [mismatch]})).status_code == 422
     assert (await client.post("imports/preview", json={**request, "path": str(tmp_path)})).status_code == 403
     assert (await client.post("imports/preview-stream", json={**request, "path": str(tmp_path)})).status_code == 403
     assert (await client.post("imports/execute", json={"items": []})).status_code == 422

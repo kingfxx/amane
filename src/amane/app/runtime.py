@@ -41,6 +41,7 @@ from ..media.watermarks import user_watermark_dir
 from ..net.browser import BrowserPool
 from ..net.http import RateLimiters, WebClient, site_proxy_overrides
 from ..playback import PlaybackFactory, PlaybackState
+from ..plugins.import_cache import ImportCache
 from ..plugins.manager import PluginManager
 from ..plugins.packaging import install_plugin_path, install_plugin_zip, uninstall_plugin_tree
 from ..scheduler.worker import MAIN_LOOP_STOP_TIMEOUT, AsyncWorker
@@ -222,6 +223,7 @@ class AppRuntime:
     event_bus: EventBus
     release_checker: ReleaseChecker
     resource_store: ResourceStore
+    import_cache: ImportCache
     proxy_failure_cache: ProxyFailureCache
     proxy_downloads: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(PROXY_DOWNLOAD_CONCURRENCY))
     watcher_service: WatcherService | None = None
@@ -343,6 +345,7 @@ class AppRuntime:
                 library_locks=self.library_locks,
                 inventory_store=self.inventory_store,
                 semantic=self.semantic,
+                import_cache=self.import_cache,
             ),
             concurrency=hot.worker.concurrency,
             poll_interval=hot.worker.poll_interval,
@@ -550,6 +553,7 @@ def build_handlers(
     semantic: SemanticService,
     library_locks: LibraryTaskLocks | None = None,
     inventory_store: InventoryStore | None = None,
+    import_cache: ImportCache | None = None,
 ) -> dict[TaskType, TaskHandler[Any, Any]]:
     # 未启用/缺密钥时 translator 为 None, ScrapeHandler 跳过翻译.
     # 经 _rebuild() 热重载; 代理沿用 network.proxy.
@@ -574,7 +578,7 @@ def build_handlers(
     if inventory_store is None:
         inventory_store = InventoryStore()
     handlers: dict[TaskType, TaskHandler[Any, Any]] = {
-        TaskType.PLUGIN_IMPORT: PluginImportHandler(repo, resource_store, plugin_manager, hot, safe_dirs),
+        TaskType.PLUGIN_IMPORT: PluginImportHandler(repo, resource_store, plugin_manager, hot, safe_dirs, import_cache),
         TaskType.REFRESH: RefreshHandler(repo, hot.watcher.media_extensions, inventory_store),
         TaskType.SCRAPE: ScrapeHandler(
             repo,

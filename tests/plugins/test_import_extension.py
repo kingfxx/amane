@@ -1,14 +1,19 @@
+import os
+import time
 from pathlib import Path
+from typing import IO
 
 import pytest
 from PIL import Image
 
 from amane.config import HotSettings
+from amane.db.models import TaskType
 from amane.db.repository import Repository
 from amane.enums import MetadataField
 from amane.handlers.plugin_import import PluginImportHandler, PluginImportPayload, _media_path
 from amane.media import ResourceStore
 from amane.plugin import ImportPlugin, ImportProvider
+from amane.plugins.import_cache import ImportCache
 from amane.plugins.importing import discover_imports, read_import
 from amane.plugins.manager import PluginManager
 from amane.plugins.packaging import load_plugin
@@ -282,3 +287,123 @@ async def test_import_preserves_fields_paths_and_source_files(
     assert (await repo.list_import_records(other.id))[0].local_trailer_paths == [str(trailer.resolve())]
     await repo.delete_metadata(other.id)
     assert await repo.list_import_records(other.id) == []
+
+
+@pytest.mark.asyncio
+async def test_import_snapshot_reads_sources_once_and_survives_restart(
+    nfo_provider: ImportProvider,
+    repo: Repository,
+    resource_store: ResourceStore,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = tmp_path / "cloud"
+    directory.mkdir()
+    source = directory / "ABC-123-UC.nfo"
+    original = "<movie><num>ABC-123</num><title>预览标题</title></movie>"
+    source.write_text(original, encoding="utf-8")
+    image = directory / "poster.jpg"
+    Image.new("RGB", (20, 30), "red").save(image)
+    video = directory / "ABC-123-UC.mp4"
+    video.write_bytes(b"video")
+    (directory / "ABC-123-UC.srt").write_text("subtitle", encoding="utf-8")
+    library = await repo.create_library(name="缓存导入", path=str(directory))
+    cache = ImportCache(resource_store.data_dir)
+    reads: list[Path] = []
+    original_open = Path.open
+
+    def track_open(
+        path: Path,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> IO[str] | IO[bytes]:
+        if path.is_relative_to(directory) and "r" in mode:
+            reads.append(path)
+        return original_open(path, mode, buffering, encoding, errors, newline)
+
+    monkeypatch.setattr(Path, "open", track_open)
+    staged = await cache.stage(nfo_provider, "local.nfo", source, directory, [directory])
+    assert reads.count(source) == 1 and reads.count(image) == 1 and video not in reads
+    assert staged.snapshot.candidate.source_bytes is None
+    cached_source = cache.root / staged.cache_id / staged.snapshot.source_file
+    assert cached_source.read_text(encoding="utf-8") == original
+    # 来源目录不可访问时, 新实例和任务重试仍只使用本地快照.
+    directory.rename(tmp_path / "offline")
+    reads.clear()
+    loaded = load_plugin("local.nfo", Path(__file__).resolve().parents[2] / "extensions/nfo-import")
+    manager = PluginManager({"local.nfo": loaded.plugin}, [])
+    handler = PluginImportHandler(
+        repo, resource_store, manager, HotSettings(), [directory], ImportCache(resource_store.data_dir)
+    )
+    payload = PluginImportPayload(
+        source_id="local.nfo",
+        root=str(directory),
+        source_path=str(source),
+        source_hash=staged.snapshot.candidate.source_hash,
+        cache_id=staged.cache_id,
+        library_id=library.id,
+    )
+    for _ in range(2):
+        assert (await handler.handle(payload)).success
+    assert reads == []
+    meta = await repo.get_metadata_by_number("ABC-123")
+    assert meta is not None and meta.id is not None and meta.title == "预览标题"
+    files = await repo.get_media_by_metadata_id(meta.id)
+    assert len(files) == 1 and files[0].path == str(video) and files[0].size == 5
+    assert files[0].has_external_subtitle and files[0].mosaic == "cracked"
+    assert len(await resource_store.list_all()) == 1
+    records = await repo.list_import_records(meta.id)
+    assert records[0].source_path == str(source)
+
+
+@pytest.mark.asyncio
+async def test_import_cache_validation_and_cleanup(
+    nfo_provider: ImportProvider,
+    repo: Repository,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "ABC-123.nfo"
+    source.write_text("<movie><num>ABC-123</num></movie>", encoding="utf-8")
+    cache = ImportCache(tmp_path / "data")
+    staged = await cache.stage(nfo_provider, "local.nfo", source, tmp_path, [tmp_path])
+    digest = staged.snapshot.candidate.source_hash
+    for cache_id, source_id, root, source_path, source_hash, roots, error, message in (
+        ("../outside", "local.nfo", str(tmp_path), str(source), digest, [tmp_path], ValueError, "标识无效"),
+        ("0" * 32, "local.nfo", str(tmp_path), str(source), digest, [tmp_path], ValueError, "不存在或已清理"),
+        (staged.cache_id, "other.nfo", str(tmp_path), str(source), digest, [tmp_path], ValueError, "不匹配"),
+        (staged.cache_id, "local.nfo", str(tmp_path), str(source), "0" * 64, [tmp_path], ValueError, "不匹配"),
+        (staged.cache_id, "local.nfo", str(tmp_path), str(source), digest, [], PermissionError, "安全目录"),
+    ):
+        with pytest.raises(error, match=message):
+            await cache.load(cache_id, source_id, root, source_path, source_hash, roots)
+    cached_source = cache.root / staged.cache_id / staged.snapshot.source_file
+    cached_source.write_text("changed", encoding="utf-8")
+    with pytest.raises(ValueError, match="来源内容无效"):
+        await cache.load(staged.cache_id, "local.nfo", str(tmp_path), str(source), digest, [tmp_path])
+    expected: dict[str, bool] = {staged.cache_id: False}
+    for status in ("queued", "failed", "done"):
+        entry = await cache.stage(nfo_provider, "local.nfo", source, tmp_path, [tmp_path])
+        task = await repo.create_task(
+            TaskType.PLUGIN_IMPORT,
+            PluginImportPayload(
+                source_id="local.nfo",
+                root=str(tmp_path),
+                source_path=str(source),
+                source_hash=digest,
+                cache_id=entry.cache_id,
+            ),
+        )
+        assert task.id is not None
+        if status == "failed":
+            await repo.fail_task(task.id, "retry")
+        elif status == "done":
+            await repo.complete_task(task.id)
+        expected[entry.cache_id] = status != "done"
+    for cache_id in expected:
+        expired = time.time() - 8 * 24 * 60 * 60
+        os.utime(cache.root / cache_id, (expired, expired))
+    await cache.cleanup(repo)
+    assert {cache_id: (cache.root / cache_id).exists() for cache_id in expected} == expected

@@ -462,6 +462,9 @@
       "source_hash": {
         "label": "Preview file hash"
       },
+      "cache_id": {
+        "label": "Preview cache ID"
+      },
       "root": {
         "label": "Authorized directory"
       },

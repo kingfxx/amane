@@ -10,6 +10,7 @@ from ...db.models import TaskType
 from ...db.repository import Repository
 from ...handlers.plugin_import import PluginImportPayload
 from ...plugins.api import ImportProvider
+from ...plugins.import_cache import ImportCache
 from ...plugins.import_models import ImportCandidate
 from ...plugins.importing import discover_imports, import_provider, read_import
 from ...plugins.manager import PluginManager
@@ -30,6 +31,7 @@ class ImportPreviewItem(BaseModel):
     candidate: ImportCandidate | None = None
     existing_metadata_id: int | None = None
     error: str | None = None
+    cache_id: str | None = None
 
 
 class ImportPreviewResponse(BaseModel):
@@ -43,6 +45,7 @@ class ImportPreviewProgress(BaseModel):
     processed: int
     item: ImportPreviewItem | None = None
     complete: bool = False
+    current_path: str | None = None
 
 
 class _PreviewStream(StreamingResponse):
@@ -61,6 +64,7 @@ async def _preview_sources(
     req: ImportPreviewRequest, runtime: AppRuntime, manager: PluginManager
 ) -> tuple[Path, ImportProvider, tuple[Path, ...]]:
     root = await validate_directory_path(req.path, runtime.safe_dirs)
+    await runtime.import_cache.cleanup(runtime.repo)
     try:
         provider = import_provider(manager, runtime.config.hot, req.source_id)
         sources = await discover_imports(provider, root, req.recursive, runtime.safe_dirs)
@@ -72,13 +76,23 @@ async def _preview_sources(
 
 
 async def _preview_item(
-    provider: ImportProvider, path: Path, root: Path, safe_dirs: Sequence[Path] | None, repo: Repository
+    provider: ImportProvider,
+    path: Path,
+    root: Path,
+    safe_dirs: Sequence[Path] | None,
+    repo: Repository,
+    source_id: str,
+    cache: ImportCache,
 ) -> ImportPreviewItem:
     try:
-        candidate = await read_import(provider, path, root, safe_dirs)
+        staged = await cache.stage(provider, source_id, path, root, safe_dirs)
+        candidate = staged.snapshot.candidate
         existing = await repo.get_metadata_by_number(candidate.metadata.number)
         return ImportPreviewItem(
-            path=str(path), candidate=candidate, existing_metadata_id=existing.id if existing else None
+            path=str(path),
+            candidate=candidate,
+            existing_metadata_id=existing.id if existing else None,
+            cache_id=staged.cache_id,
         )
     except (OSError, ValueError) as exc:
         return ImportPreviewItem(path=str(path), error=str(exc))
@@ -89,7 +103,10 @@ async def preview_import(
     req: ImportPreviewRequest, repo: RepoDep, runtime: RuntimeDep, manager: PluginManagerDep
 ) -> ImportPreviewResponse:
     root, provider, sources = await _preview_sources(req, runtime, manager)
-    items = [await _preview_item(provider, path, root, runtime.safe_dirs, repo) for path in sources]
+    items = [
+        await _preview_item(provider, path, root, runtime.safe_dirs, repo, req.source_id, runtime.import_cache)
+        for path in sources
+    ]
     return ImportPreviewResponse(root=str(root), items=items)
 
 
@@ -103,11 +120,17 @@ async def preview_import_stream(
         progress = ImportPreviewProgress(root=str(root), total=len(sources), processed=0)
         yield f"data: {progress.model_dump_json()}\n\n"
         for path in sources:
-            progress.item = await _preview_item(provider, path, root, runtime.safe_dirs, repo)
+            progress.item = None
+            progress.current_path = str(path)
+            yield f"data: {progress.model_dump_json()}\n\n"
+            progress.item = await _preview_item(
+                provider, path, root, runtime.safe_dirs, repo, req.source_id, runtime.import_cache
+            )
             progress.processed += 1
             yield f"data: {progress.model_dump_json()}\n\n"
         progress.item = None
         progress.complete = True
+        progress.current_path = None
         yield f"data: {progress.model_dump_json()}\n\n"
 
     return _PreviewStream(events(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -117,27 +140,39 @@ async def preview_import_stream(
 async def execute_import(
     req: ImportExecuteRequest, repo: RepoDep, runtime: RuntimeDep, manager: PluginManagerDep
 ) -> ImportExecuteResponse:
-    # 全部候选先校验再入队; Worker 执行前仍重新读取, 不能信任预览时的文件状态.
-    for item in req.items:
-        root = await validate_directory_path(item.root, runtime.safe_dirs)
-        try:
-            provider = import_provider(manager, runtime.config.hot, item.source_id)
-            candidate = await read_import(provider, Path(item.source_path), root, runtime.safe_dirs)
-        except PermissionError as exc:
-            raise HTTPException(403, detail=str(exc)) from exc
-        except (OSError, ValueError) as exc:
-            raise HTTPException(422, detail=str(exc)) from exc
-        if candidate.source_hash != item.source_hash:
-            raise HTTPException(409, detail="来源文件在预览后发生变化, 请重新预览")
-        if item.library_id is not None and await repo.get_library(item.library_id) is None:
-            raise HTTPException(404, detail="所选媒体库不存在")
-        item.root = str(root)
-        item.source_path = candidate.source_path
-    task_ids: list[int] = []
-    for item in req.items:
-        task = await repo.create_task(TaskType.PLUGIN_IMPORT, item)
-        assert task.id is not None
-        task_ids.append(task.id)
+    # 校验和入队期间保护缓存; 不接受客户端直接提交解析结果或本地缓存路径.
+    async with runtime.import_cache.lock:
+        for item in req.items:
+            try:
+                provider = import_provider(manager, runtime.config.hot, item.source_id)
+                if item.cache_id is not None:
+                    snapshot = await runtime.import_cache.load(
+                        item.cache_id,
+                        item.source_id,
+                        item.root,
+                        item.source_path,
+                        item.source_hash,
+                        runtime.safe_dirs,
+                    )
+                    candidate = snapshot.candidate
+                else:
+                    root = await validate_directory_path(item.root, runtime.safe_dirs)
+                    candidate = await read_import(provider, Path(item.source_path), root, runtime.safe_dirs)
+                    item.root = str(root)
+            except PermissionError as exc:
+                raise HTTPException(403, detail=str(exc)) from exc
+            except (OSError, ValueError) as exc:
+                raise HTTPException(422, detail=str(exc)) from exc
+            if candidate.source_hash != item.source_hash:
+                raise HTTPException(409, detail="来源文件在预览后发生变化, 请重新预览")
+            if item.library_id is not None and await repo.get_library(item.library_id) is None:
+                raise HTTPException(404, detail="所选媒体库不存在")
+            item.source_path = candidate.source_path
+        task_ids: list[int] = []
+        for item in req.items:
+            task = await repo.create_task(TaskType.PLUGIN_IMPORT, item)
+            assert task.id is not None
+            task_ids.append(task.id)
     return ImportExecuteResponse(task_ids=task_ids)
 
 

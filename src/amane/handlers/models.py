@@ -24,6 +24,7 @@ class PluginImportPayload(BaseModel):
     root: str
     source_path: str
     source_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    cache_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     library_id: int | None = None
     overwrite_existing: bool = Field(default=False, description="使用导入的非空值覆盖未锁定字段; 缺失字段不清空已有值")
 

@@ -24,6 +24,7 @@ from ..llm import TranslationCache, TranslationCoalescer
 from ..media import ResourceStore
 from ..observability import setup_logging
 from ..playback import PlaybackFactory, PlaybackState
+from ..plugins.import_cache import ImportCache
 from ..plugins.manager import PluginManager
 from ..release import ReleaseChecker
 from ..scheduler.cron import CronScheduler
@@ -132,6 +133,8 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
     # 向量 sidecar, 不纳入 Alembic; 删除该文件即清空索引. 惰性建立连接, 未使用语义检索时不创建文件.
     embeddings = EmbeddingStore(cold.data_dir / "embeddings.db")
     repo = Repository(engine, embeddings=embeddings)
+    import_cache = ImportCache(cold.data_dir)
+    await import_cache.cleanup(repo)
 
     # 会话级只读引擎, 不纳入 Alembic; dsn 变更经 _rebuild() 重建
     r18_db = build_r18_db(hot.r18)
@@ -195,6 +198,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
         plugin_manager,
         library_locks=library_locks,
         inventory_store=inventory_store,
+        import_cache=import_cache,
         semantic=semantic_service,
     )
 
@@ -245,6 +249,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
         event_bus=event_bus,
         release_checker=ReleaseChecker(),
         resource_store=resource_store,
+        import_cache=import_cache,
         proxy_failure_cache=ProxyFailureCache(),
         watcher_service=watcher_service,
         feed_service=feed_service,

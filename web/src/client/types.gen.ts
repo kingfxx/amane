@@ -1954,6 +1954,10 @@ export type ImportPreviewItem = {
      * Error
      */
     error?: string | null;
+    /**
+     * Cache Id
+     */
+    cache_id?: string | null;
 };
 
 /**
@@ -1977,6 +1981,10 @@ export type ImportPreviewProgress = {
      * Complete
      */
     complete?: boolean;
+    /**
+     * Current Path
+     */
+    current_path?: string | null;
 };
 
 /**
@@ -3735,6 +3743,10 @@ export type PluginImportPayload = {
      */
     source_hash: string;
     /**
+     * Cache Id
+     */
+    cache_id?: string | null;
+    /**
      * Library Id
      */
     library_id?: number | null;
@@ -3788,6 +3800,10 @@ export type PluginImportSubmission = {
      * Source Hash
      */
     source_hash: string;
+    /**
+     * Cache Id
+     */
+    cache_id?: string | null;
     /**
      * Library Id
      */

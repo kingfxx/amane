@@ -3865,6 +3865,17 @@ export const ImportPreviewItemSchema = {
                 }
             ],
             title: 'Error'
+        },
+        cache_id: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cache Id'
         }
     },
     type: 'object',
@@ -3902,6 +3913,17 @@ export const ImportPreviewProgressSchema = {
             type: 'boolean',
             title: 'Complete',
             default: false
+        },
+        current_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Current Path'
         }
     },
     type: 'object',
@@ -7241,6 +7263,18 @@ export const PluginImportPayloadSchema = {
             pattern: '^[0-9a-f]{64}$',
             title: 'Source Hash'
         },
+        cache_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    pattern: '^[0-9a-f]{32}$'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cache Id'
+        },
         library_id: {
             anyOf: [
                 {
@@ -7320,6 +7354,18 @@ export const PluginImportSubmissionSchema = {
             type: 'string',
             pattern: '^[0-9a-f]{64}$',
             title: 'Source Hash'
+        },
+        cache_id: {
+            anyOf: [
+                {
+                    type: 'string',
+                    pattern: '^[0-9a-f]{32}$'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Cache Id'
         },
         library_id: {
             anyOf: [

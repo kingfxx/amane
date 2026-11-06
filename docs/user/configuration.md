@@ -98,6 +98,7 @@ Docker 中填写容器内路径, 并覆盖所有挂载的媒体目录, 如 `/med
 ├── gfriends.json                gFriends 头像索引缓存
 ├── r18_import.json              r18.dev 导入状态
 ├── resources/                   刮削下载的封面、海报、剧照、预告片与头像
+├── import-cache/                导入预览的来源文件、图片及元数据快照
 ├── agent/sessions/              智能体会话记录
 ├── plugins/                     插件代码 (sources/) 与各插件的数据
 ├── tools/                       图像超分程序, 首次使用时按平台下载

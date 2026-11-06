@@ -431,6 +431,9 @@
       "source_hash": {
         "label": "预览文件散列"
       },
+      "cache_id": {
+        "label": "预览缓存标识"
+      },
       "root": {
         "label": "授权目录"
       },

@@ -11,6 +11,7 @@ from ..db.repository import Repository
 from ..enums import MetadataField
 from ..library import has_companion_subtitle
 from ..media import ResourceStore
+from ..plugins.import_cache import ImportCache
 from ..plugins.importing import import_provider, read_import
 from ..plugins.manager import PluginManager
 from ..utils.path import nfc_path, resolved_path
@@ -35,6 +36,7 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
         manager: PluginManager | None,
         hot: HotSettings,
         safe_dirs: Sequence[Path] | None,
+        import_cache: ImportCache | None = None,
     ) -> None:
         super().__init__(PluginImportPayload, PluginImportResult)
         self._repo = repo
@@ -42,12 +44,26 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
         self._manager = manager
         self._hot = hot
         self._safe_dirs = safe_dirs
+        self._cache = import_cache or ImportCache(store.data_dir)
 
     async def handle(self, payload: PluginImportPayload) -> TaskResult[PluginImportResult]:
         if self._manager is None:
             raise ValueError("导入插件目录未初始化")
         provider = import_provider(self._manager, self._hot, payload.source_id)
-        candidate = await read_import(provider, Path(payload.source_path), Path(payload.root), self._safe_dirs)
+        snapshot = None
+        if payload.cache_id is not None:
+            async with self._cache.lock:
+                snapshot = await self._cache.load(
+                    payload.cache_id,
+                    payload.source_id,
+                    payload.root,
+                    payload.source_path,
+                    payload.source_hash,
+                    self._safe_dirs,
+                )
+            candidate = snapshot.candidate
+        else:
+            candidate = await read_import(provider, Path(payload.source_path), Path(payload.root), self._safe_dirs)
         if candidate.source_hash != payload.source_hash:
             raise ValueError("来源文件在预览后发生变化, 请重新预览")
         files: list[MediaFile] = []
@@ -56,7 +72,15 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
             if library is None:
                 raise ValueError("所选媒体库不存在")
             for path in candidate.media_paths:
-                actual, size = await _media_path(path, library.path)
+                if snapshot is not None:
+                    cached_media = next(item for item in snapshot.media if item.path == nfc_path(path))
+                    if not Path(cached_media.path).is_relative_to(Path(library.path)):
+                        raise ValueError("关联正片不在所选媒体库内")
+                    actual, size = cached_media.path, cached_media.size
+                    has_subtitle = bool(set(cached_media.subtitle_extensions) & set(library.subtitle_extensions))
+                else:
+                    actual, size = await _media_path(path, library.path)
+                    has_subtitle = await has_companion_subtitle(Path(actual), library.subtitle_extensions)
                 files.append(
                     MediaFile(
                         library_id=payload.library_id,
@@ -64,11 +88,11 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
                         size=size,
                         number=candidate.metadata.number,
                         status=MediaFileStatus.SCRAPED,
-                        has_external_subtitle=await has_companion_subtitle(Path(actual), library.subtitle_extensions),
+                        has_external_subtitle=has_subtitle,
                     )
                 )
         images: dict[str, list[str]] = {"poster": [], "thumb": [], "still": []}
-        for index, image in enumerate(candidate.images):
+        for index, image in enumerate(snapshot.images if snapshot is not None else candidate.images):
             images[image.kind].append(await self._store.import_image(Path(image.path)))
             await self.report_progress(index + 1, len(candidate.images) + 1, "import")
         data = candidate.metadata

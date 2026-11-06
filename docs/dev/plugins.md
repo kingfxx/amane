@@ -7,7 +7,9 @@
 
 插件 API v1 开放**影片元数据来源**、**播放源**与**元数据导入**. 共用 `{cold.data_dir}/plugins/sources/<id>/` 与 HotSettings `plugins.<id>` 信封; 调用路径与输入输出分离. 插件不直接访问 Repository、任务 Worker、FastAPI 或前端运行时.
 
-导入契约 v1 (`ImportPlugin.import_api_version`) 独立于来源 API; 安装校验共用 `plugins/packaging.py::_require_matching_capabilities`. `plugins/importing.py` 在线程池读取候选, 路径经 `utils/path.py::resolved_path` 规范化后独立校验存在性与目录边界. 发现不限制总量; `web/src/components/plugins/import-panel.tsx::ImportPanel` 分页预览、按提交接口上限串行分批, 成功批次取消选中, 失败保留待提交项. `handlers/plugin_import.py::PluginImportHandler` 重新校验预览散列; `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一事务中写入字段、正片关联与导入记录. 默认补充空字段, 覆盖只写非空值, 均遵守字段锁并保留未改字段的来源. `ImportRecord` 不参与刮削快照替换, 删除与合并元数据须处理其归属. 图片按内容复制, 预告片保留远程链接, 本地预览片只记录路径. 导入禁止派生刮削与整理任务; 格式规则只在独立插件中实现.
+导入契约 v1 (`ImportPlugin.import_api_version`) 独立于来源 API; 安装校验共用 `plugins/packaging.py::_require_matching_capabilities`. `plugins/importing.py` 在线程池读取候选并校验来源目录边界; 格式规则只在插件中实现. 插件可随候选返回原文字节供主机缓存, 原文不经 HTTP 返回. `plugins/import_cache.py::ImportCache` 在 `{data_dir}/import-cache` 保存预览快照, 提交与任务执行只读取本地副本; 正片路径、大小及字幕扩展名在预览时确定, 不复制正片或本地预览片, 关联仍使用原路径. 无缓存标识的任务维持来源重读与散列校验. 缓存跨重启保留; 启动与预览前清理超过七天且未被排队、运行、失败任务引用的快照. 提交和清理共用会话级锁, 热重建必须复用同一实例.
+
+发现不限制总量; `web/src/components/plugins/import-panel.tsx::ImportPanel` 分页预览、按接口上限分批提交, 成功批次取消选中. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一事务写入字段、正片关联与导入记录. 默认补充空字段, 覆盖只写非空值, 均遵守字段锁. `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须处理其归属. 图片按内容复制, 预告片保留远程链接. 导入禁止派生刮削与整理任务.
 
 影片来源通过一个窄接口接收 `SearchQuery` 并返回 `MediaMetadata`, 随后进入现有聚合 DAG. `MediaMetadata.actors` 为 `list[FilmActor]`, 也接受 `list[str]` (性别 `unknown`), API 版本号不因此递增; 性别契约见 [crawlers.md](crawlers.md).
 

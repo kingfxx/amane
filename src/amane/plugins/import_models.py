@@ -24,3 +24,4 @@ class ImportCandidate(BaseModel):
     local_trailer_paths: list[str] = Field(default_factory=list, max_length=100)
     media_paths: list[str] = Field(default_factory=list, max_length=100)
     warnings: list[str] = Field(default_factory=list, max_length=100)
+    source_bytes: bytes | None = Field(default=None, exclude=True)

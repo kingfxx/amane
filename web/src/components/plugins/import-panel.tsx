@@ -43,7 +43,7 @@ export function ImportPanel({
   const [page, setPage] = useState(1);
   const [previewProgress, setPreviewProgress] = useState<Pick<
     ImportPreviewProgress,
-    "processed" | "total"
+    "processed" | "total" | "current_path"
   > | null>(null);
   const selectedPaths = new Set(selected);
   const libraries = useQuery({ ...listLibrariesOptions(), enabled: opened });
@@ -60,7 +60,11 @@ export function ImportPanel({
       const data: ImportPreviewResponse = { root: "", items: [] };
       let complete = false;
       for await (const event of result.stream) {
-        setPreviewProgress({ processed: event.processed, total: event.total });
+        setPreviewProgress({
+          processed: event.processed,
+          total: event.total,
+          current_path: event.current_path,
+        });
         data.root = event.root;
         if (event.item) data.items.push(event.item);
         complete = event.complete === true;
@@ -87,6 +91,7 @@ export function ImportPanel({
             root: preview.root,
             source_path: item.candidate.source_path,
             source_hash: item.candidate.source_hash,
+            cache_id: item.cache_id,
             library_id: library ? Number(library) : null,
             overwrite_existing: overwriteExisting,
           },
@@ -187,6 +192,13 @@ export function ImportPanel({
                 ? t("import.previewProgress", previewProgress)
                 : t("import.discovering")}
             </Text>
+            {previewProgress ? (
+              <Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
+                {previewProgress.current_path
+                  ? t("import.caching", { path: previewProgress.current_path })
+                  : null}
+              </Text>
+            ) : null}
             {previewProgress ? (
               <Progress
                 value={

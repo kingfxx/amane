@@ -255,6 +255,7 @@ class NfoProvider(ImportProvider):
         return ImportCandidate(
             source_path=str(path.resolve()),
             source_hash=hashlib.sha256(data).hexdigest(),
+            source_bytes=data,
             metadata=metadata,
             images=list({(image.kind, image.path): image for image in images}.values()),
             media_paths=list(dict.fromkeys(media)),
@@ -270,7 +271,7 @@ class Plugin(ImportPlugin):
         return SourceDescriptor(
             id="local.nfo",
             name="本地 NFO 导入",
-            version="0.1.2",
+            version="0.1.3",
             capabilities=frozenset({SourceCapability.METADATA_IMPORT}),
         )
 
