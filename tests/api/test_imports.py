@@ -6,6 +6,8 @@ from zipfile import ZipFile
 import pytest
 from httpx2 import AsyncClient
 
+from amane.api.routes.imports import ImportPreviewProgress
+
 
 @pytest.mark.asyncio
 async def test_import_api_install_preview_execute_and_errors(client: AsyncClient, tmp_path: Path) -> None:
@@ -22,6 +24,34 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     preview = await client.post("imports/preview", json=request)
     assert preview.status_code == 200, preview.text
     candidate = preview.json()["items"][0]["candidate"]
+    (directory / "invalid.nfo").write_text("<movie>", encoding="utf-8")
+    streamed = await client.post("imports/preview-stream", json=request)
+    assert streamed.status_code == 200, streamed.text
+    assert streamed.headers["content-type"].startswith("text/event-stream")
+    events = [
+        ImportPreviewProgress.model_validate_json(line.removeprefix("data: "))
+        for line in streamed.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert [(event.processed, event.total, event.complete) for event in events] == [
+        (0, 2, False),
+        (1, 2, False),
+        (2, 2, False),
+        (2, 2, True),
+    ]
+    results = {Path(event.item.path).name: event.item for event in events if event.item is not None}
+    assert results["JUR-840.nfo"].candidate is not None
+    assert results["JUR-840.nfo"].candidate.metadata.number == "JUR-840"
+    assert "XML 格式" in (results["invalid.nfo"].error or "")
+    empty = directory / "empty"
+    empty.mkdir()
+    empty_stream = await client.post("imports/preview-stream", json={**request, "path": str(empty)})
+    empty_events = [
+        ImportPreviewProgress.model_validate_json(line.removeprefix("data: "))
+        for line in empty_stream.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert [(event.total, event.processed, event.complete) for event in empty_events] == [(0, 0, False), (0, 0, True)]
     body = {
         "items": [
             {
@@ -50,6 +80,7 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     source.write_text("<movie><num>JUR-840</num><title>变化</title></movie>", encoding="utf-8")
     assert (await client.post("imports/execute", json=body)).status_code == 409
     assert (await client.post("imports/preview", json={**request, "path": str(tmp_path)})).status_code == 403
+    assert (await client.post("imports/preview-stream", json={**request, "path": str(tmp_path)})).status_code == 403
     assert (await client.post("imports/execute", json={"items": []})).status_code == 422
     oversized = await client.post("imports/execute", json={"items": body["items"] * 501})
     assert oversized.status_code == 422
@@ -59,3 +90,4 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     ).status_code == 422
     assert (await client.patch("plugins/local.nfo", json={"enabled": False})).status_code == 200
     assert (await client.post("imports/preview", json=request)).status_code == 422
+    assert (await client.post("imports/preview-stream", json=request)).status_code == 422

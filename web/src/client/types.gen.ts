@@ -1957,6 +1957,29 @@ export type ImportPreviewItem = {
 };
 
 /**
+ * ImportPreviewProgress
+ */
+export type ImportPreviewProgress = {
+    /**
+     * Root
+     */
+    root: string;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Processed
+     */
+    processed: number;
+    item?: ImportPreviewItem | null;
+    /**
+     * Complete
+     */
+    complete?: boolean;
+};
+
+/**
  * ImportPreviewRequest
  */
 export type ImportPreviewRequest = {
@@ -6055,6 +6078,31 @@ export type PreviewImportResponses = {
 };
 
 export type PreviewImportResponse = PreviewImportResponses[keyof PreviewImportResponses];
+
+export type PreviewImportStreamData = {
+    body: ImportPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/api/imports/preview-stream';
+};
+
+export type PreviewImportStreamErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewImportStreamError = PreviewImportStreamErrors[keyof PreviewImportStreamErrors];
+
+export type PreviewImportStreamResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportPreviewProgress;
+};
+
+export type PreviewImportStreamResponse = PreviewImportStreamResponses[keyof PreviewImportStreamResponses];
 
 export type ExecuteImportData = {
     body: ImportExecuteRequest;

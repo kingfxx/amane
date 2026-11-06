@@ -1,12 +1,18 @@
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ...app.runtime import AppRuntime
 from ...db.models import TaskType
+from ...db.repository import Repository
 from ...handlers.plugin_import import PluginImportPayload
+from ...plugins.api import ImportProvider
 from ...plugins.import_models import ImportCandidate
 from ...plugins.importing import discover_imports, import_provider, read_import
+from ...plugins.manager import PluginManager
 from ..deps import PluginManagerDep, RepoDep, RuntimeDep
 from ..support.path_validation import validate_directory_path
 
@@ -31,6 +37,18 @@ class ImportPreviewResponse(BaseModel):
     items: list[ImportPreviewItem]
 
 
+class ImportPreviewProgress(BaseModel):
+    root: str
+    total: int
+    processed: int
+    item: ImportPreviewItem | None = None
+    complete: bool = False
+
+
+class _PreviewStream(StreamingResponse):
+    media_type = "text/event-stream"
+
+
 class ImportExecuteRequest(BaseModel):
     items: list[PluginImportPayload] = Field(min_length=1, max_length=500)
 
@@ -39,10 +57,9 @@ class ImportExecuteResponse(BaseModel):
     task_ids: list[int]
 
 
-@router.post("/preview")
-async def preview_import(
-    req: ImportPreviewRequest, repo: RepoDep, runtime: RuntimeDep, manager: PluginManagerDep
-) -> ImportPreviewResponse:
+async def _preview_sources(
+    req: ImportPreviewRequest, runtime: AppRuntime, manager: PluginManager
+) -> tuple[Path, ImportProvider, tuple[Path, ...]]:
     root = await validate_directory_path(req.path, runtime.safe_dirs)
     try:
         provider = import_provider(manager, runtime.config.hot, req.source_id)
@@ -51,19 +68,49 @@ async def preview_import(
         raise HTTPException(403, detail=str(exc)) from exc
     except (OSError, ValueError) as exc:
         raise HTTPException(422, detail=str(exc)) from exc
-    items: list[ImportPreviewItem] = []
-    for path in sources:
-        try:
-            candidate = await read_import(provider, path, root, runtime.safe_dirs)
-            existing = await repo.get_metadata_by_number(candidate.metadata.number)
-            items.append(
-                ImportPreviewItem(
-                    path=str(path), candidate=candidate, existing_metadata_id=existing.id if existing else None
-                )
-            )
-        except (OSError, ValueError) as exc:
-            items.append(ImportPreviewItem(path=str(path), error=str(exc)))
+    return root, provider, sources
+
+
+async def _preview_item(
+    provider: ImportProvider, path: Path, root: Path, safe_dirs: Sequence[Path] | None, repo: Repository
+) -> ImportPreviewItem:
+    try:
+        candidate = await read_import(provider, path, root, safe_dirs)
+        existing = await repo.get_metadata_by_number(candidate.metadata.number)
+        return ImportPreviewItem(
+            path=str(path), candidate=candidate, existing_metadata_id=existing.id if existing else None
+        )
+    except (OSError, ValueError) as exc:
+        return ImportPreviewItem(path=str(path), error=str(exc))
+
+
+@router.post("/preview")
+async def preview_import(
+    req: ImportPreviewRequest, repo: RepoDep, runtime: RuntimeDep, manager: PluginManagerDep
+) -> ImportPreviewResponse:
+    root, provider, sources = await _preview_sources(req, runtime, manager)
+    items = [await _preview_item(provider, path, root, runtime.safe_dirs, repo) for path in sources]
     return ImportPreviewResponse(root=str(root), items=items)
+
+
+@router.post("/preview-stream", response_class=_PreviewStream, responses={200: {"model": ImportPreviewProgress}})
+async def preview_import_stream(
+    req: ImportPreviewRequest, repo: RepoDep, runtime: RuntimeDep, manager: PluginManagerDep
+) -> StreamingResponse:
+    root, provider, sources = await _preview_sources(req, runtime, manager)
+
+    async def events() -> AsyncIterator[str]:
+        progress = ImportPreviewProgress(root=str(root), total=len(sources), processed=0)
+        yield f"data: {progress.model_dump_json()}\n\n"
+        for path in sources:
+            progress.item = await _preview_item(provider, path, root, runtime.safe_dirs, repo)
+            progress.processed += 1
+            yield f"data: {progress.model_dump_json()}\n\n"
+        progress.item = None
+        progress.complete = True
+        yield f"data: {progress.model_dump_json()}\n\n"
+
+    return _PreviewStream(events(), headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.post("/execute", status_code=202)

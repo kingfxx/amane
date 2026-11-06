@@ -67,6 +67,48 @@
         }
       }
     },
+    "/api/imports/preview-stream": {
+      "post": {
+        "tags": [
+          "imports"
+        ],
+        "summary": "Preview Import Stream",
+        "operationId": "preview_import_stream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreviewProgress",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/imports/execute": {
       "post": {
         "tags": [
@@ -10602,6 +10644,44 @@
           "path"
         ],
         "title": "ImportPreviewItem"
+      },
+      "ImportPreviewProgress": {
+        "properties": {
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "processed": {
+            "type": "integer",
+            "title": "Processed"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportPreviewItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "root",
+          "total",
+          "processed"
+        ],
+        "title": "ImportPreviewProgress"
       },
       "ImportPreviewRequest": {
         "properties": {

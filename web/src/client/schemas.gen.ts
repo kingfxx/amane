@@ -3874,6 +3874,45 @@ export const ImportPreviewItemSchema = {
     title: 'ImportPreviewItem'
 } as const;
 
+export const ImportPreviewProgressSchema = {
+    properties: {
+        root: {
+            type: 'string',
+            title: 'Root'
+        },
+        total: {
+            type: 'integer',
+            title: 'Total'
+        },
+        processed: {
+            type: 'integer',
+            title: 'Processed'
+        },
+        item: {
+            anyOf: [
+                {
+                    $ref: '#/components/schemas/ImportPreviewItem'
+                },
+                {
+                    type: 'null'
+                }
+            ]
+        },
+        complete: {
+            type: 'boolean',
+            title: 'Complete',
+            default: false
+        }
+    },
+    type: 'object',
+    required: [
+        'root',
+        'total',
+        'processed'
+    ],
+    title: 'ImportPreviewProgress'
+} as const;
+
 export const ImportPreviewRequestSchema = {
     properties: {
         source_id: {

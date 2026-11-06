@@ -5,6 +5,7 @@ import {
   Group,
   Modal,
   Pagination,
+  Progress,
   ScrollArea,
   Select,
   Stack,
@@ -14,8 +15,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listLibrariesOptions } from "@/client/@tanstack/react-query.gen";
-import { executeImport, previewImport } from "@/client/sdk.gen";
-import type { ImportPreviewResponse } from "@/client/types.gen";
+import { executeImport, previewImportStream } from "@/client/sdk.gen";
+import type { ImportPreviewProgress, ImportPreviewResponse } from "@/client/types.gen";
 import { PathPicker } from "@/components/path-picker";
 import { extractErrorMessage } from "@/lib/api-error";
 
@@ -40,15 +41,32 @@ export function ImportPanel({
   const [selected, setSelected] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [previewProgress, setPreviewProgress] = useState<Pick<
+    ImportPreviewProgress,
+    "processed" | "total"
+  > | null>(null);
   const selectedPaths = new Set(selected);
   const libraries = useQuery({ ...listLibrariesOptions(), enabled: opened });
   const inspect = useMutation({
     mutationFn: async () => {
-      const result = await previewImport({
+      const result = await previewImportStream({
         body: { source_id: sourceId, path, recursive },
         throwOnError: true,
+        sseMaxRetryAttempts: 1,
+        onSseError: (error) => {
+          throw error;
+        },
       });
-      return result.data;
+      const data: ImportPreviewResponse = { root: "", items: [] };
+      let complete = false;
+      for await (const event of result.stream) {
+        setPreviewProgress({ processed: event.processed, total: event.total });
+        data.root = event.root;
+        if (event.item) data.items.push(event.item);
+        complete = event.complete === true;
+      }
+      if (!complete) throw new Error(t("import.previewInterrupted"));
+      return data;
     },
     onSuccess: (data) => {
       if (!data) return;
@@ -97,6 +115,7 @@ export function ImportPanel({
     setSelected([]);
     setSubmitted(null);
     setPage(1);
+    setPreviewProgress(null);
     inspect.reset();
     execute.reset();
   };
@@ -161,6 +180,24 @@ export function ImportPanel({
         >
           {t("import.preview")}
         </Button>
+        {inspect.isPending || previewProgress ? (
+          <Stack gap="xs" role="status" aria-live="polite">
+            <Text size="sm">
+              {previewProgress
+                ? t("import.previewProgress", previewProgress)
+                : t("import.discovering")}
+            </Text>
+            {previewProgress ? (
+              <Progress
+                value={
+                  previewProgress.total === 0
+                    ? 100
+                    : (previewProgress.processed / previewProgress.total) * 100
+                }
+              />
+            ) : null}
+          </Stack>
+        ) : null}
         {error ? <Alert color="red">{extractErrorMessage(error, t("import.failed"))}</Alert> : null}
         {preview ? (
           <ScrollArea.Autosize mah={360}>
