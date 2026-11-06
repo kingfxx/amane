@@ -5,11 +5,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..db import Library, MediaFileStatus
+from ..db.models import TaskType
 from ..library import LibraryHit, LibraryScan, has_companion_subtitle
+from ..observability import current
 from ..utils.oshash import compute_oshash
 from ..utils.threads import existing_disk_path, in_thread
+from .models import ActorScrapePayload
+from .protocol import FollowupTask
 
 if TYPE_CHECKING:
+    from ..config import HotSettings
     from ..db.models import MediaFile
     from ..db.repository import Repository
 
@@ -93,3 +98,24 @@ async def finalize_media_file(repo: Repository, media_file_id: int | None, metad
     if media_file_id is None:
         return
     await repo.update_media_file(media_file_id, status=MediaFileStatus.SCRAPED, metadata_id=metadata_id)
+
+
+async def actor_scrape_followups(repo: Repository, config: HotSettings, actor_names: list[str]) -> list[FollowupTask]:
+    """按自动刮削配置为尚无站点快照的演员生成后继; 构建失败不阻断主任务."""
+    if not config.actor_scraping.auto_scrape or not actor_names:
+        return []
+    try:
+        actors = await repo.get_actors_by_names(actor_names)
+        return [
+            FollowupTask(
+                key=f"actor-scrape:{actor.id}",
+                task_type=TaskType.ACTOR_SCRAPE,
+                payload=ActorScrapePayload(actor_id=actor.id).model_dump(mode="json"),
+                priority=-1,
+            )
+            for actor in actors
+            if actor.id is not None and not actor.raw
+        ]
+    except Exception:
+        current().warning("failed to build actor scrape followups", actors=actor_names)
+        return []

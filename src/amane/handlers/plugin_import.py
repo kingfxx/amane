@@ -1,4 +1,4 @@
-"""每个来源文件独立执行与提交, 不派生刮削或整理任务."""
+"""每个来源文件独立执行与提交, 按配置派生演员刮削任务."""
 
 from collections.abc import Sequence
 from pathlib import Path
@@ -16,6 +16,7 @@ from ..plugins.importing import import_provider, read_import
 from ..plugins.manager import PluginManager
 from ..utils.path import nfc_path, resolved_path
 from ..utils.threads import in_thread
+from ._common import actor_scrape_followups
 from .models import PluginImportPayload, PluginImportResult
 from .protocol import TaskHandler, TaskResult
 
@@ -147,6 +148,7 @@ class PluginImportHandler(TaskHandler[PluginImportPayload, PluginImportResult]):
         assert meta.id is not None
         return TaskResult(
             success=True,
+            followups=await actor_scrape_followups(self._repo, self._hot, meta.actors),
             result=PluginImportResult(
                 metadata_id=meta.id, images=len(candidate.images), local_trailer_paths=candidate.local_trailer_paths
             ),

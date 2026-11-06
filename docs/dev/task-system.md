@@ -9,7 +9,7 @@
 
 | 任务 | 职责 | 排除范围 |
 | ------ | ------ | ------ |
-| `PLUGIN_IMPORT` | 按导入插件候选补充元数据、复制图片、登记来源与文件关联; 契约见 [plugins.md](plugins.md) | 网络刮削、整理与预览片复制 |
+| `PLUGIN_IMPORT` | 按导入插件候选补充元数据、复制图片、登记来源与文件关联; 契约见 [plugins.md](plugins.md) | 影片刮削、整理与预览片复制 |
 | `REFRESH` | 扫描增删、注册 MediaFile、fan-out SCRAPE (`use_cache` 原样转发); 整库范围时顺带写入清理清单 | 移动文件、写 NFO |
 | `SCRAPE` | 联网聚合 → DB → Resource; `media_file_id` 只作查询输入 (番号 / oshash) 与回写关联 | 库内移动 / NFO |
 | `ORGANIZE` | 范围内已有 Metadata 的 MediaFile 按路径模板落盘, 并删除本次腾空的目录; 缺资源时 `acquire` 可出站 HTTP | 扫描磁盘、运行爬虫、修改 Metadata |
@@ -27,11 +27,13 @@ ORGANIZE 只读取范围内的 `MediaFile` 行: 缺省为该库全部索引, 显
 
 入队互斥在 `create_task`: queued / running 的 ACTOR_SCRAPE 按 `payload.actor_id` 复用已有行; ORGANIZE 与 DELETE 每次提交都新建行, 禁止复用, 同库的二者共用 `LibraryTaskLocks` 在执行期串行 (都在同一棵树上动文件). 不同库 / 不同演员仍并行. `ACTOR_PUSH` 不做入队互斥: 重复推送按当前服务器状态重算, 是幂等的. API、Agent、链式入队、retry 都经由 `create_task`, Worker 不按类型加锁; 终态之后允许再入队; 互斥不比较 payload 其它字段. 检查与插入须在 Repository 上串行化 (单进程), 机制见 [database.md](database.md)「写入事务边界」.
 
+影片刮削与插件导入共用 `src/amane/handlers/_common.py::actor_scrape_followups`: 按 `actor_scraping.auto_scrape` 为最终关联演员中 `raw` 为空者生成后继, 优先级为 -1; 构建失败不阻断主任务.
+
 ## 任务图 (TaskLink)
 
 后继任务只经 `TaskResult.followups` 进入完成事务:
 
-- **动态后继**: handler 在执行期间才确定后继数量与 payload, 经 `TaskResult.followups` 返回. REFRESH→SCRAPE、RESCRAPE→SCRAPE / ACTOR_SCRAPE、SCRAPE→ACTOR_SCRAPE、ACTOR_SCRAPE→ACTOR_PUSH 都是这一形态. ACTOR_PUSH 只在 media server 已配置且 actor_scraping.auto_push 开启时产生, 优先级为 -1; 推送失败不回传父任务.
+- **动态后继**: handler 在执行期间才确定后继数量与 payload, 经 `TaskResult.followups` 返回. REFRESH→SCRAPE、RESCRAPE→SCRAPE / ACTOR_SCRAPE、SCRAPE / PLUGIN_IMPORT→ACTOR_SCRAPE、ACTOR_SCRAPE→ACTOR_PUSH 都是这一形态. ACTOR_PUSH 只在 media server 已配置且 actor_scraping.auto_push 开启时产生, 优先级为 -1; 推送失败不回传父任务.
 - **统一完成事务**: worker 成功路径调用 `Repository.complete_task_with_followups` — 一个事务内完成父任务、创建子任务 (复用 `create_task` 的入队互斥)、写 `TaskLink` 边; 父完成与子创建原子, 失败路径不产生后继. 它与 `create_task` 同一把入队锁串行化, 因此两个父任务并发派生同一互斥键时只会复用同一行.
 - **`TaskLink`** 是父子边真值: `(parent_task_id, key)` 唯一, `key` 须在父节点内区分后继 (fan-out 带实体 id); 完成事务对同 key 只留第一条. 删除任务时清理其边, 不删除另一端任务.
 - **链聚合**: `tasks.root_task_id` 记录链根 (根指向自己), 一棵链一次 `list_tasks_by_root` 取回. 任务列表默认只显示链根, `child_count` / `child_status` 是直接后继的数量与状态分布, 折叠节点据此显示.

@@ -12,8 +12,8 @@ from ..media import materialize_images
 from ..observability import current
 from ..observability.models import SiteOutcomeKind
 from ..plugins.models import SourceDescriptor, SourceTrait
-from ._common import ensure_oshash, finalize_media_file
-from .models import ActorScrapePayload, CacheKind, OrganizePayload, ScrapePayload, ScrapeResult
+from ._common import actor_scrape_followups, ensure_oshash, finalize_media_file
+from .models import CacheKind, OrganizePayload, ScrapePayload, ScrapeResult
 from .protocol import FollowupTask, TaskHandler, TaskResult
 
 if TYPE_CHECKING:
@@ -203,7 +203,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
         await finalize_media_file(self._repo, payload.media_file_id, meta.id)
 
         # 为尚未刮削的演员扇出 ACTOR_SCRAPE.
-        actor_followups = await self._actor_scrape_followups(meta.actors)
+        actor_followups = await actor_scrape_followups(self._repo, self._config, meta.actors)
         # 库开启自动整理时为本次刮削的文件扇出 ORGANIZE.
         organize_followups = await self._auto_organize_followups(payload, file)
 
@@ -276,31 +276,6 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
             ]
         except Exception:
             current().exception("failed to build auto organize followup", media_file_id=file.id)
-            return []
-
-    async def _actor_scrape_followups(self, actor_names: list[str]) -> list[FollowupTask]:
-        """为尚未刮削的影片演员描述 ACTOR_SCRAPE 后继; 失败不阻断主流程.
-
-        ``meta.actors`` 已是 FacetRule 后的规范名, 与 sync_metadata_facets 创建的 Actor 对应, 缺失名静默跳过.
-        跳过 ``Actor.raw`` 非空者 (站点快照可复用).
-        ``priority=-1``: 批量产生的演员任务不能抢占影片任务.
-        """
-        if not self._config.actor_scraping.auto_scrape or not actor_names:
-            return []
-        try:
-            actors = await self._repo.get_actors_by_names(actor_names)
-            return [
-                FollowupTask(
-                    key=f"actor-scrape:{actor.id}",
-                    task_type=TaskType.ACTOR_SCRAPE,
-                    payload=ActorScrapePayload(actor_id=actor.id).model_dump(mode="json"),
-                    priority=-1,
-                )
-                for actor in actors
-                if actor.id is not None and not actor.raw
-            ]
-        except Exception:
-            current().warning("failed to build actor scrape followups", actors=actor_names)
             return []
 
     async def _translate_metadata(

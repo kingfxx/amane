@@ -6,7 +6,7 @@ from typing import IO
 import pytest
 from PIL import Image
 
-from amane.config import HotSettings
+from amane.config import ActorScrapingConfig, HotSettings
 from amane.db.models import TaskType
 from amane.db.repository import Repository
 from amane.enums import MetadataField
@@ -17,6 +17,94 @@ from amane.plugins.import_cache import ImportCache
 from amane.plugins.importing import discover_imports, read_import
 from amane.plugins.manager import PluginManager
 from amane.plugins.packaging import load_plugin
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True], ids=["source", "snapshot"])
+@pytest.mark.parametrize("case", ["new", "mixed", "scraped", "disabled", "empty", "preserved", "lookup_failure"])
+async def test_import_actor_followups(
+    case: str,
+    cached: bool,
+    repo: Repository,
+    resource_store: ResourceStore,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded = load_plugin("local.nfo", Path(__file__).resolve().parents[2] / "extensions/nfo-import")
+    assert isinstance(loaded.plugin, ImportPlugin)
+    provider = loaded.plugin.build_importer(loaded.plugin.configuration_model()())
+    manager = PluginManager({"local.nfo": loaded.plugin}, [])
+    await repo.upsert_metadata("ABC-001", actors=["已有档案", "规范姓名", "保留演员"])
+    actors = {actor.name: actor for actor in await repo.get_actors_by_names(["已有档案", "规范姓名", "保留演员"])}
+    scraped_id = actors["已有档案"].id
+    canonical_id = actors["规范姓名"].id
+    assert scraped_id is not None and canonical_id is not None
+    await repo.update_actor(scraped_id, raw={"minnano": {"gender": "female"}})
+    await repo.add_actor_alias(canonical_id, "别名")
+    names, expected = {
+        "new": (["新演员", "新演员"], {"新演员"}),
+        "mixed": (["新演员", "已有档案", "别名"], {"新演员", "规范姓名"}),
+        "scraped": (["已有档案"], set()),
+        "disabled": (["新演员"], set()),
+        "empty": ([], set()),
+        "preserved": (["新演员"], {"保留演员"}),
+        "lookup_failure": (["新演员"], set()),
+    }[case]
+    if case == "preserved":
+        await repo.upsert_metadata("ABC-123", actors=["保留演员"])
+    if case == "lookup_failure":
+
+        async def fail_lookup(names: list[str]) -> list[object]:
+            raise RuntimeError("演员查询失败")
+
+        monkeypatch.setattr(repo, "get_actors_by_names", fail_lookup)
+    source = tmp_path / "ABC-123.nfo"
+    source.write_text(
+        "<movie><num>ABC-123</num>" + "".join(f"<actor><name>{name}</name></actor>" for name in names) + "</movie>",
+        encoding="utf-8",
+    )
+    cache = ImportCache(resource_store.data_dir)
+    staged = await cache.stage(provider, "local.nfo", source, tmp_path, [tmp_path]) if cached else None
+    payload = PluginImportPayload(
+        source_id="local.nfo",
+        root=str(tmp_path),
+        source_path=str(source),
+        source_hash=staged.snapshot.candidate.source_hash if staged else provider.read(source).source_hash,
+        cache_id=staged.cache_id if staged else None,
+    )
+    handler = PluginImportHandler(
+        repo,
+        resource_store,
+        manager,
+        HotSettings(actor_scraping=ActorScrapingConfig(auto_scrape=case != "disabled")),
+        [tmp_path],
+        cache,
+    )
+    child_ids: set[int | None] = set()
+    for _ in range(2):
+        parent = await repo.create_task(TaskType.PLUGIN_IMPORT, payload)
+        claimed = await repo.claim_next_task()
+        assert claimed is not None and claimed.id == parent.id and claimed.id is not None
+        result = await handler.handle(payload)
+        assert result.success and result.result is not None
+        actual_names: set[str] = set()
+        for followup in result.followups:
+            assert followup.task_type == TaskType.ACTOR_SCRAPE and followup.priority == -1
+            actor = await repo.get_actor(followup.payload["actor_id"])
+            assert actor is not None
+            actual_names.add(actor.name)
+        assert actual_names == expected
+        children = await repo.complete_task_with_followups(
+            claimed.id,
+            result=result.as_dict(),
+            followups=[(f.key, f.task_type, f.payload, f.priority) for f in result.followups],
+        )
+        child_ids.update(child.id for child in children)
+        links = await repo.list_task_links(parent_task_id=claimed.id)
+        assert {link.child_task_id for link in links} == {child.id for child in children}
+    assert len(child_ids) == len(expected)
+    meta = await repo.get_metadata_by_number("ABC-123")
+    assert meta is not None and (case != "preserved" or meta.actors == ["保留演员"])
 
 
 @pytest.mark.asyncio

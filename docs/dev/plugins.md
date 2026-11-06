@@ -13,7 +13,7 @@
 
 缓存跨重启保留; 启动与预览前清理超过七天且未被排队、运行、失败任务引用的快照. 提交和清理共用会话级锁, 热重建复用同一实例; 认领不改变引用保护. 缓存缺失或不兼容禁止自动重新下载来源文件.
 
-发现不限制总量; `web/src/components/plugins/import-panel.tsx::ImportPanel` 分页预览、按接口上限分批提交, 成功批次取消选中. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一事务写入字段、正片关联与导入记录. 默认补充空字段, 覆盖只写非空值, 均遵守字段锁. `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须处理其归属. 图片按内容复制, 预告片保留远程链接. 导入禁止派生刮削与整理任务.
+发现不限制总量; `web/src/components/plugins/import-panel.tsx::ImportPanel` 分页预览、按接口上限分批提交, 成功批次取消选中. `db/repos/metadata.py::MetadataRepoMixin.upsert_metadata` 在同一事务写入字段、正片关联与导入记录. 默认补充空字段, 覆盖只写非空值, 均遵守字段锁. `ImportRecord` 不参与刮削快照替换, 元数据删除与合并须处理其归属. 图片按内容复制, 预告片保留远程链接. 导入按配置派生演员刮削后继, 见 [task-system.md](task-system.md); 不派生影片刮削或整理任务.
 
 影片来源通过一个窄接口接收 `SearchQuery` 并返回 `MediaMetadata`, 随后进入现有聚合 DAG. `MediaMetadata.actors` 为 `list[FilmActor]`, 也接受 `list[str]` (性别 `unknown`), API 版本号不因此递增; 性别契约见 [crawlers.md](crawlers.md).
 
