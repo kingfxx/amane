@@ -6,6 +6,8 @@
 
 一次性预告片补充脚本见 `tests/trailer_backfill/backfill.py::main`: 复用来源配置, 仅通过 API 更新缺失链接, 并恢复手动更新自动增加的字段锁; 不提交刮削任务.
 
+Windows 托盘的启动选择与设置解析经 `just windows-source-check` 验证 (`tests/windows_source/Program.cs`); 真实进程监督仍需运行 EXE 验证, 见 [desktop.md](desktop.md).
+
 必须自开文件库时调用 `copy_schema` (`tests/schema_template.py`), 不能在每个测试里 `create_all` / Alembic. **例外**: 测迁移本身必须从空文件起步. GET `/config` 全量相等用 `hot_for_tests()`, 不能与裸 `HotSettings()` 比较 (夹具 poll 不是生产默认). 真文件系统的 watcher 集成把 `observer_timeout` / `check_interval` 收到 0.1 / 0.05; 否定断言用短 `wait_for(duration=…)`, 先后顺序用事件判据 (`tests/helpers.py::LoopProgressProbe`), 条件等待上限用 `tests/helpers.py::LOAD_TOLERANT_TIMEOUT`; 不能用 sleep 长短或真实耗时代替同步原语 — 超售的 CI runner 上单次事件循环轮转可达数百毫秒.
 
 ## 测试分层

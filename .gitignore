@@ -194,6 +194,8 @@ macapp/.build/
 # Windows desktop (winapp/)
 winapp/bin/
 winapp/obj/
+tests/windows_source/bin/
+tests/windows_source/obj/
 
 # Android shell (androidapp/)
 androidapp/.gradle/

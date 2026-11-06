@@ -65,6 +65,8 @@ internal sealed class App
     private readonly ConcurrentQueue<Action> _ui = new();
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(20) };
     private readonly bool _uiOnly;
+    private readonly ServerLaunch? _launch;
+    private readonly string _settingsPath;
     private readonly TimeSpan _restartDelay;
 
     /// 用户真实环境变量快照. 设置文件与内置默认值都不覆盖它.
@@ -102,6 +104,10 @@ internal sealed class App
     private App()
     {
         _uiOnly = Env("AMANE_UI_ONLY") == "1";
+        _launch = _uiOnly ? null : ServerLaunch.Resolve(AppContext.BaseDirectory, Env("AMANE_BIN"));
+        _settingsPath = _launch?.SourceRoot is null
+            ? DesktopSettings.SettingsPath
+            : Path.Combine(AppContext.BaseDirectory, DesktopSettings.FileName);
         _restartDelay = TimeSpan.FromSeconds(2);
         if (double.TryParse(Env("AMANE_RESTART_DELAY"), out var delay) && delay >= 0)
         {
@@ -111,9 +117,17 @@ internal sealed class App
 
     internal static int Run()
     {
-        var app = new App();
-        _instance = app;
-        return app.RunLoop();
+        try
+        {
+            var app = new App();
+            _instance = app;
+            return app.RunLoop();
+        }
+        catch (Exception ex)
+        {
+            Native.MessageBox(0, ex.Message, "Amane", Native.MbOk | Native.MbIconInformation);
+            return 1;
+        }
     }
 
     private int RunLoop()
@@ -154,12 +168,33 @@ internal sealed class App
     /// 经菜单「重启服务器」即生效.
     private void ApplyDesktopEnv()
     {
-        DesktopSettings.CreateIfMissing();
-        var parsed = DesktopSettings.Parse(ReadSettingsFile());
-        var data = Resolve(parsed, "AMANE_DATA_DIR") ?? DesktopSettings.DefaultDataDir;
-        var logs = Resolve(parsed, "AMANE_LOG_DIR") ?? Path.Combine(data, "logs");
+        var source = _launch?.SourceRoot;
+        var defaultData = source is null ? DesktopSettings.DefaultDataDir : Path.Combine(source, "data");
+        var defaultPort = _uiOnly || source is not null ? "8000" : "18000";
+        DesktopSettings.CreateIfMissing(_settingsPath, defaultData, defaultPort);
+        var parsed = DesktopSettings.Parse(ReadSettingsFile(_settingsPath));
+        if (source is not null)
+        {
+            // Python 在项目目录读取 dotenv; 托盘同步求解其可识别的键, 保持地址和鉴权一致.
+            var values = DesktopSettings.Parse(ReadSettingsFile(Path.Combine(source, ".env.dev"))).Values;
+            foreach (var file in new[] { Path.Combine(source, ".env"), _settingsPath })
+            {
+                foreach (var pair in DesktopSettings.Parse(ReadSettingsFile(file)).Values)
+                {
+                    values[pair.Key] = pair.Value;
+                }
+            }
+            parsed = new(values, parsed.UnknownKeys);
+        }
+        var data = Resolve(parsed, "AMANE_DATA_DIR") ?? defaultData;
+        var logs = Resolve(parsed, "AMANE_LOG_DIR") ?? (source is null ? Path.Combine(data, "logs") : Path.Combine(source, "logs"));
+        if (source is not null)
+        {
+            data = Path.GetFullPath(data, source);
+            logs = Path.GetFullPath(logs, source);
+        }
         var host = Resolve(parsed, "AMANE_HOST") ?? "127.0.0.1";
-        var port = Resolve(parsed, "AMANE_PORT") ?? (_uiOnly ? "8000" : "18000");
+        var port = Resolve(parsed, "AMANE_PORT") ?? defaultPort;
         _resolvedDataDir = data;
 
         if (!_uiOnly)
@@ -173,7 +208,7 @@ internal sealed class App
             Export("AMANE_TOKEN", Resolve(parsed, "AMANE_TOKEN"));
             Export("PYDANTIC_DISABLE_PLUGINS", Env("PYDANTIC_DISABLE_PLUGINS") ?? "1");
             Export("AMANE_SUPERVISED", "1");
-            var web = Path.Combine(AppContext.BaseDirectory, "web", "dist", "index.html");
+            var web = Path.Combine(source ?? AppContext.BaseDirectory, "web", "dist", "index.html");
             if (File.Exists(web))
             {
                 Export("AMANE_WEB_DIST", Path.GetDirectoryName(web));
@@ -225,11 +260,11 @@ internal sealed class App
     private static void Export(string key, string? value) =>
         Environment.SetEnvironmentVariable(key, value);
 
-    private static string ReadSettingsFile()
+    private static string ReadSettingsFile(string path)
     {
         try
         {
-            return File.ReadAllText(DesktopSettings.SettingsPath);
+            return File.ReadAllText(path);
         }
         catch (Exception)
         {
@@ -250,27 +285,6 @@ internal sealed class App
     }
 
     private static string DataDir() => _resolvedDataDir;
-
-    private static string? ServerBinary()
-    {
-        var overrideBin = Env("AMANE_BIN");
-        if (!string.IsNullOrEmpty(overrideBin))
-        {
-            return File.Exists(overrideBin) ? overrideBin : null;
-        }
-
-        var onedir = Path.Combine(AppContext.BaseDirectory, "onedir");
-        foreach (var name in new[] { "Amane.Server.exe", "Amane.exe" })
-        {
-            var candidate = Path.Combine(onedir, name);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
 
     private void ResolveTokenAtStart(string? token)
     {
@@ -326,8 +340,8 @@ internal sealed class App
 
     private void SupervisePython()
     {
-        var bin = ServerBinary();
-        if (bin is null)
+        var launch = _launch;
+        if (launch is null)
         {
             OnUi(() =>
             {
@@ -350,7 +364,7 @@ internal sealed class App
             {
                 ApplyDesktopEnv();
                 OnUi(ClearFailure);
-                proc = StartPython(bin, log);
+                proc = StartPython(launch, log);
             }
             catch (Exception ex)
             {
@@ -406,18 +420,23 @@ internal sealed class App
         }
     }
 
-    private Process StartPython(string bin, ProcessLog log)
+    private Process StartPython(ServerLaunch launch, ProcessLog log)
     {
         var psi = new ProcessStartInfo
         {
-            FileName = bin,
-            WorkingDirectory = Path.GetDirectoryName(bin) ?? AppContext.BaseDirectory,
+            FileName = launch.Executable,
+            WorkingDirectory = launch.WorkingDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
         psi.Environment["AMANE_UI_DISABLED"] = "1";
+        if (launch.SourceRoot is not null)
+        {
+            psi.ArgumentList.Add("-m");
+            psi.ArgumentList.Add("amane.server");
+        }
         foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
         {
             psi.ArgumentList.Add(arg);
@@ -893,12 +912,12 @@ internal sealed class App
     }
 
     /// 打开设置文件; 未关联 .env 时回退到系统记事本.
-    private static void OpenSettingsFile()
+    private void OpenSettingsFile()
     {
-        DesktopSettings.CreateIfMissing();
+        DesktopSettings.CreateIfMissing(_settingsPath, DataDir(), _launch?.SourceRoot is null ? "18000" : "8000");
         try
         {
-            Process.Start(new ProcessStartInfo(DesktopSettings.SettingsPath) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(_settingsPath) { UseShellExecute = true });
             return;
         }
         catch (Exception)
@@ -908,7 +927,7 @@ internal sealed class App
 
         try
         {
-            Process.Start(new ProcessStartInfo("notepad.exe", DesktopSettings.SettingsPath));
+            Process.Start(new ProcessStartInfo("notepad.exe", _settingsPath));
         }
         catch (Exception)
         {
@@ -1088,8 +1107,8 @@ internal sealed class App
             Alert(
                 Tr("设置文件包含无法识别的键", "Unknown keys in the settings file"),
                 Tr(
-                    $"以下键将被忽略:\n{list}\n\n文件: {DesktopSettings.SettingsPath}",
-                    $"These keys are ignored:\n{list}\n\nFile: {DesktopSettings.SettingsPath}"
+                    $"以下键将被忽略:\n{list}\n\n文件: {_settingsPath}",
+                    $"These keys are ignored:\n{list}\n\nFile: {_settingsPath}"
                 )
             )
         );

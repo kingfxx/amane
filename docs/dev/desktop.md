@@ -21,7 +21,7 @@ UI 不嵌进服务进程: 原生菜单 / 通知需要它独立, 嵌进 Python �
 **Windows** 两个进程; 监督与托盘在同一个 `WinExe` 里 (没有 Launch Services / bundle id 可抢, `NotifyIcon` 必须跟消息循环同进程):
 
 - **应用进程**: `winapp/` → `Amane.exe`. 命名 Mutex `Local\com.github.sqzw-x.amane` 单实例; 隐藏窗口泵消息 + 托盘, 后台线程监督 Python. Python 放入 Job Object (`KILL_ON_JOB_CLOSE`), 任务管理器杀掉壳时服务一起结束. 退出码 **0 / 130 / 143 / 0xC000013A** 结束 App, **3** 立刻再次启动 Python (托盘还在), **4** 启动失败 (退避后重试, 原因展示在托盘菜单), `Process.Start` 失败结束 App, 其它退避 2s; 设置 `AMANE_SUPERVISED=1`.
-- **服务进程**: PyInstaller onedir `onedir/Amane.Server.exe`, 由壳 `CreateNoWindow` 启动.
+- **服务进程**: `winapp/ServerLaunch.cs::Resolve` 选择 PyInstaller onedir 或源码目录的 `.venv` 执行 `amane.server`; 均由壳隐藏启动并监督, 源码模式以项目目录为工作目录.
 
 Windows 壳是 Per-Monitor V2 (`winapp/app.manifest`): 未声明时系统把 `TrackPopupMenu` 整张位图按缩放拉伸, 高分屏上菜单字发糊; 菜单跟的是**属主 HWND 的 DPI**, 因此弹出前必须先把隐藏窗口移到光标处.
 
@@ -56,6 +56,8 @@ macOS UI argv (`AmaneUI --base-url http://127.0.0.1:PORT [--token <token>] [--wa
 
 壳注入的环境变量来自数据目录旁的 `desktop.env` (macOS `~/Library/Application Support/Amane/desktop.env`, Windows `%LOCALAPPDATA%\Amane\desktop.env`), 每行 `KEY=VALUE`, 首次启动写入注释模板. 该路径取默认数据目录, 不随 `AMANE_DATA_DIR` 变动 — 读取它必须早于确定数据目录.
 
+Windows 源码模式由 EXE 旁的 `source-root.txt` 指定项目目录 (相对路径以 EXE 目录解析), 设置文件也位于 EXE 旁. 真实环境变量优先, 文件按项目 `.env.dev`、`.env`、启动器 `desktop.env` 顺序覆盖托盘可识别的键, 其余 dotenv 键仍由 Python 读取. 默认数据 / 日志来自项目 `data` / `logs`, 端口为 8000; 相对数据 / 日志路径均以项目目录解析. `ServerLaunch.Resolve` 在启动前校验 Python 环境和前端产物, 更新源码后重启生效, 前端仍需构建.
+
 - **优先级**: 真实环境变量 > 设置文件 > 壳内置默认值; 空值按未设置处理.
 - **可写入的键**: `AMANE_HOST` (默认 `127.0.0.1`, 绑定回环以避免防火墙弹窗)、`AMANE_PORT`、`AMANE_DATA_DIR` / `AMANE_LOG_DIR` (默认数据目录及其 `logs`)、`AMANE_SAFE_DIRS` (默认 `ALLOW_ALL` 关闭边界校验)、`AMANE_TOKEN`.
 - **生效时机**: 壳在每次启动 Python 前重新求解, 因此修改后经菜单「重启服务器」即生效. `AMANE_HOST` / `AMANE_PORT` 变化会改变 UI 兄弟进程的 `--base-url`, macOS 壳须同时重建该进程; Windows 的轮询地址由壳自身重算, 无需重建.
@@ -72,4 +74,4 @@ macOS: `scripts/build_macos_app.sh` (`just macos-app`), 需要 Swift 工具链 �
 
 两边 PyInstaller 都要打进 `amane/db/migrations` 与 `amane/media/watermarks`, 并按平台收集整个标准库 (见 `scripts/stdlib_modules.py`). **插件是运行时从数据目录动态加载的**, PyInstaller 的静态导入图看不见它们引用什么; 只收标准库之外的部分会让插件在桌面版报 `ModuleNotFoundError`. 简繁转换的内置词表 `amane/utils/zhcdict.json` 同样不在静态导入图内, 两个打包脚本都必须用 `--add-data` 收集; 桌面包缺失该文件时简繁转换失败.
 
-开发回路: `just dev` 起服务, 壳侧用开发专用键指向未打包的 UI — macOS `AMANE_UI_BINARY`, Windows `AMANE_UI_ONLY=1` (只开托盘、不启动 Python). Android 端不监督本机服务, 见 [android.md](android.md).
+`just windows-source` 经 `scripts/build_windows_source.ps1` 只编译自包含源码启动器, 不封装 Python. 开发回路: `just dev` 起服务, macOS 用 `AMANE_UI_BINARY`, Windows 用 `AMANE_UI_ONLY=1` 只开托盘. Android 不监督本机服务, 见 [android.md](android.md).

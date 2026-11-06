@@ -1,4 +1,4 @@
-// 桌面设置文件: %LOCALAPPDATA%\Amane\desktop.env.
+// 打包模式的桌面设置文件: %LOCALAPPDATA%\Amane\desktop.env; 源码模式由调用者提供路径.
 // 位置取默认数据目录, 不随 AMANE_DATA_DIR 变动 — 读取该文件必须早于确定数据目录.
 // 契约与 macOS 壳 (macapp/Sources/AmaneShared/DesktopSettings.swift) 一致: 文件名、键列表、模板与解析规则逐条对应.
 
@@ -30,19 +30,19 @@ internal static class DesktopSettings
 
     internal static string SettingsPath { get; } = Path.Combine(DefaultDataDir, FileName);
 
-    internal static string Template { get; } =
+    internal static string TemplateFor(string dataDir, string port) =>
         $"""
         # Amane 桌面设置. 每行一个 KEY=VALUE, 以 # 开头的行为注释.
         # 真实环境变量优先于本文件. 修改后经菜单「重启服务器」生效.
         #
         # 数据目录 (数据库、资源、插件). 修改后不会迁移已有数据.
-        # AMANE_DATA_DIR={DefaultDataDir}
+        # AMANE_DATA_DIR={dataDir}
         #
         # API 监听地址. 默认只接受本机连接; 0.0.0.0 或 :: 使局域网可访问, 托盘仍访问本机地址.
         # AMANE_HOST=127.0.0.1
         #
         # API 监听端口. 与其它服务冲突时修改.
-        # AMANE_PORT=18000
+        # AMANE_PORT={port}
         #
         # 文件浏览器与库路径的边界目录, 逗号分隔; ALLOW_ALL 关闭校验.
         # AMANE_SAFE_DIRS=ALLOW_ALL
@@ -87,17 +87,18 @@ internal static class DesktopSettings
     }
 
     /// 首次运行写入模板; 已有文件不覆盖.
-    internal static void CreateIfMissing()
+    internal static void CreateIfMissing(string? settingsPath = null, string? dataDir = null, string port = "18000")
     {
-        if (File.Exists(SettingsPath))
+        var path = settingsPath ?? SettingsPath;
+        if (File.Exists(path))
         {
             return;
         }
 
         try
         {
-            Directory.CreateDirectory(DefaultDataDir);
-            File.WriteAllText(SettingsPath, Template, new UTF8Encoding(false));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, TemplateFor(dataDir ?? DefaultDataDir, port), new UTF8Encoding(false));
         }
         catch (Exception)
         {

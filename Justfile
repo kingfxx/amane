@@ -184,6 +184,14 @@ macos-app: sync build
 windows-app *args: sync build
     pwsh -NoProfile -File scripts/build_windows_app.ps1 {{args}}
 
+# 编译源码托盘启动器, 后台使用项目的 Python 环境
+windows-source: build
+    pwsh -NoProfile -File scripts/build_windows_source.ps1
+
+# 验证 Windows 启动模式和桌面设置解析
+windows-source-check:
+    dotnet run --project tests/windows_source/Amane.Source.Checks.csproj -c Release
+
 # SPA 由服务端提供, 不依赖 web/dist; 无 androidapp/keystore.properties 时退回 debug 包
 # 构建 Android 壳的 APK (需 JDK 17+ 与 Android SDK)
 android-app:
