@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import ClassVar, Literal, override
 from urllib.parse import urlsplit
+from uuid import UUID
 from xml.etree import ElementTree as ET
 from xml.parsers import expat
 
@@ -100,6 +101,15 @@ def _texts(root: ET.Element, *names: str) -> list[str]:
             node.text.strip() for name in names for node in root.findall(name) if node.text and node.text.strip()
         )
     )
+
+
+def _filename_number(stem: str) -> str | None:
+    """UUID 文件名不提供番号, 避免其中片段优先于 NFO 标题被识别."""
+    try:
+        UUID(stem)
+    except ValueError:
+        return extract_number(stem)
+    return None
 
 
 def _numeric(value: str | None, field: str, maximum: float) -> float | None:
@@ -242,10 +252,10 @@ class NfoProvider(SnapshotImportProvider):
         if explicit and (number is None or number.casefold() != explicit.casefold()):
             raise ValueError("NFO 番号标识无效")
         title = _text(root, "title", "originaltitle")
-        number = number or extract_number(path.stem) or extract_number(title or "")
+        from_name = _filename_number(path.stem)
+        number = number or from_name or extract_number(title or "")
         if not number:
             raise ValueError("NFO 缺少可识别的番号")
-        from_name = extract_number(path.stem)
         if from_name and from_name.casefold() != number.casefold():
             raise ValueError("NFO 番号与文件名冲突")
         if title:
@@ -279,7 +289,7 @@ class NfoProvider(SnapshotImportProvider):
         for item in siblings:
             suffix = item.suffix.casefold()
             stem = item.stem.casefold()
-            item_number = extract_number(item.stem)
+            item_number = _filename_number(item.stem)
             related = (
                 item_number == number
                 if item_number

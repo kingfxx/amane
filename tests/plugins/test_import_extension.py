@@ -177,6 +177,33 @@ def test_nfo_bare_ampersands_preserve_source_and_cdata(nfo_provider: ImportProvi
     assert artwork.extrafanart == ["https://example.test/still.jpg"]
 
 
+def test_nfo_uuid_filename_uses_metadata_number(nfo_provider: ImportProvider, tmp_path: Path) -> None:
+    companion = tmp_path / "SHKD-750-C.nfo"
+    companion.write_text("<movie><num>SHKD-750</num><title>SHKD-750 标题</title></movie>", encoding="utf-8")
+    video = tmp_path / "SHKD-750-C.mp4"
+    video.write_bytes(b"video")
+    poster = tmp_path / "SHKD-750-C-poster.jpg"
+    Image.new("RGB", (20, 30), "red").save(poster)
+    for filename in ("87e72755-4493-456e-9a77-64d1d64c3807", "87e727554493456e9a7764d1d64c3807"):
+        source = tmp_path / f"{filename}.nfo"
+        for fields, error in (
+            ("<title>SHKD-750 标题</title>", None),
+            ("<originaltitle>SHKD-750 标题</originaltitle>", None),
+            ("<num>SHKD-750</num><title>SHKD-750 标题</title>", None),
+            ("<title>没有番号</title>", "缺少可识别的番号"),
+        ):
+            source.write_text(f"<movie>{fields}</movie>", encoding="utf-8")
+            if error:
+                with pytest.raises(ValueError, match=error):
+                    nfo_provider.read(source)
+                continue
+            for path in (source, companion):
+                candidate = nfo_provider.read(path)
+                assert candidate.metadata.number == "SHKD-750" and candidate.metadata.title == "标题"
+                assert candidate.media_paths == [str(video.resolve())]
+                assert [(image.kind, image.path) for image in candidate.images] == [("poster", str(poster.resolve()))]
+
+
 def test_nfo_numeric_tag_compatibility(nfo_provider: ImportProvider, tmp_path: Path) -> None:
     path = tmp_path / "JUR-638.nfo"
     literal = "<7mmtvid>原文 & 内容</7mmtvid>"
