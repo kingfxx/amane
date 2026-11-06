@@ -52,9 +52,9 @@ export function LibraryActionButtons({
       }),
   });
   const organizeMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (force: boolean) => {
       await submitTask({
-        body: { type: "organize", library_id: library.id },
+        body: { type: "organize", library_id: library.id, force },
         throwOnError: true,
       });
     },
@@ -88,6 +88,15 @@ export function LibraryActionButtons({
     });
     if (!ok) return;
     deleteMutation.mutate({ path: { library_id: library.id } });
+  }
+
+  async function handleReorganize() {
+    const ok = await confirm({
+      title: t("organize.reorganize"),
+      message: t("organize.reorganizeHint"),
+      confirmLabel: t("organize.reorganize"),
+    });
+    if (ok) organizeMutation.mutate(true);
   }
 
   return (
@@ -134,14 +143,23 @@ export function LibraryActionButtons({
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>
-      <HintedActionIcon
-        variant="light"
-        loading={organizeMutation.isPending}
-        label={t("organize.tooltip")}
-        onClick={() => void organizeMutation.mutate()}
-      >
-        <IconFolderDown size={16} />
-      </HintedActionIcon>
+      <Menu shadow="md" position="bottom-end">
+        <Menu.Target>
+          <HintedActionIcon
+            variant="light"
+            loading={organizeMutation.isPending}
+            label={t("organize.tooltip")}
+          >
+            <IconFolderDown size={16} />
+          </HintedActionIcon>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item onClick={() => organizeMutation.mutate(false)}>
+            {t("organize.tooltip")}
+          </Menu.Item>
+          <Menu.Item onClick={() => void handleReorganize()}>{t("organize.reorganize")}</Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
       <HintedActionIcon
         variant="light"
         onClick={() => setCleanupOpen(true)}

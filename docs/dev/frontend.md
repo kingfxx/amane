@@ -18,7 +18,7 @@
 | **Browse** | `/saved-queries/$queryId` | `routes/saved-queries.$queryId.tsx` | `components/saved-query/`, `lib/saved-query/` |
 | **Browse** | `/feeds` | `routes/feeds.tsx` + `feeds.index.tsx` | `components/feeds/feed-reader.tsx` / `feed-sidebar.tsx`, `lib/feeds/` |
 | **Manage** | `/libraries` | `routes/libraries.tsx` + `libraries.index.tsx` | `components/library/library-form.tsx` |
-| **Manage** | `/libraries/$libraryId` | `routes/libraries.$libraryId.tsx` | `components/library/` (文件表与扫描 / 整理入口) |
+| **Manage** | `/libraries/$libraryId` | `routes/libraries.$libraryId.tsx` | `components/library/` (文件状态与扫描 / 整理) |
 | **Manage** | `/plugins` | `routes/plugins.tsx` | `components/plugins/`, `components/path-picker/` |
 | **Manage** | `/feeds/sources` | `routes/feeds.sources.tsx` | `components/feeds/feed-sources-table.tsx`, `lib/feeds/opml.ts` |
 | **Ops** | `/tasks` | `routes/tasks.tsx` | `components/task/task-tree.tsx`, `lib/task/` |

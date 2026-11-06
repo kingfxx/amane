@@ -18,7 +18,13 @@ import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listMediaQueryKey } from "@/client/@tanstack/react-query.gen";
-import { batchDeleteMedia, batchSubmitTasks, deleteMedia, submitTask } from "@/client/sdk.gen";
+import {
+  batchDeleteMedia,
+  batchSubmitTasks,
+  deleteMedia,
+  markMediaOrganized,
+  submitTask,
+} from "@/client/sdk.gen";
 import type {
   ContentType,
   MediaFileResponse,
@@ -170,6 +176,7 @@ export function LibraryMediaTable({
   );
   const [overrideTarget, setOverrideTarget] = useState<MediaFileResponse | null>(null);
   const [overrideSaving, setOverrideSaving] = useState(false);
+  const busy = batchScraping || batchOrganizing || batchDeleting;
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: listMediaQueryKey() });
 
@@ -204,12 +211,20 @@ export function LibraryMediaTable({
     clear();
   }
 
-  async function handleBatchOrganize() {
+  async function handleBatchOrganize(force = false) {
+    if (force) {
+      const ok = await confirm({
+        title: t("organize.reorganize"),
+        message: t("organize.reorganizeHint"),
+        confirmLabel: t("organize.reorganize"),
+      });
+      if (!ok) return;
+    }
     const ids = selectedIds;
     setBatchOrganizing(true);
     try {
       await submitTask({
-        body: { type: "organize", library_id: libraryId, media_file_ids: ids },
+        body: { type: "organize", library_id: libraryId, media_file_ids: ids, force },
         throwOnError: true,
       });
       notifications.show({
@@ -226,6 +241,44 @@ export function LibraryMediaTable({
       setBatchOrganizing(false);
     }
   }
+
+  async function handleMarkOrganized(organized: boolean) {
+    setBatchOrganizing(true);
+    try {
+      const { data } = await markMediaOrganized({
+        body: { ids: selectedIds, organized },
+        throwOnError: true,
+      });
+      notifications.show({ message: t("organize.marked", { count: data.updated }), color: "blue" });
+      clear();
+      invalidate();
+    } catch (err) {
+      notifications.show({
+        message: extractErrorMessage(err, t("common:toast.operationFailed")),
+        color: "red",
+      });
+    } finally {
+      setBatchOrganizing(false);
+    }
+  }
+
+  const organizeMenuItems = (
+    <>
+      <Menu.Item disabled={busy} onClick={() => void handleBatchOrganize()}>
+        {t("actions.batchOrganize")}
+      </Menu.Item>
+      <Menu.Item disabled={busy} onClick={() => void handleBatchOrganize(true)}>
+        {t("organize.reorganize")}
+      </Menu.Item>
+      <Menu.Divider />
+      <Menu.Item disabled={busy} onClick={() => void handleMarkOrganized(true)}>
+        {t("organize.markOrganized")}
+      </Menu.Item>
+      <Menu.Item disabled={busy} onClick={() => void handleMarkOrganized(false)}>
+        {t("organize.markUnorganized")}
+      </Menu.Item>
+    </>
+  );
 
   async function handleBatchDelete() {
     const ok = await confirm({
@@ -304,7 +357,6 @@ export function LibraryMediaTable({
   const allSelected = isAllSelected(pageIds);
   const effectiveSortBy = sortBy ?? "updated_at";
   const effectiveOrder = order ?? "desc";
-  const busy = batchScraping || batchOrganizing || batchDeleting;
 
   function openMediaDelete(ids: number[], includeWorkDir: boolean) {
     setDeleteTargets({ ids, workDir: includeWorkDir });
@@ -334,16 +386,20 @@ export function LibraryMediaTable({
             >
               {t("actions.batchScrape")}
             </Button>
-            <Button
-              size="xs"
-              variant="light"
-              leftSection={<IconFolderDown size={14} />}
-              loading={busy}
-              disabled={selected.size === 0}
-              onClick={() => void handleBatchOrganize()}
-            >
-              {t("actions.batchOrganize")}
-            </Button>
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target>
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconFolderDown size={14} />}
+                  loading={busy}
+                  disabled={selected.size === 0}
+                >
+                  {t("actions.batchOrganize")}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>{organizeMenuItems}</Menu.Dropdown>
+            </Menu>
             <Menu position="bottom-end" withinPortal>
               <Menu.Target>
                 <Button
@@ -381,13 +437,7 @@ export function LibraryMediaTable({
                 >
                   {t("actions.batchScrape")}
                 </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconFolderDown size={14} />}
-                  disabled={busy}
-                  onClick={() => void handleBatchOrganize()}
-                >
-                  {t("actions.batchOrganize")}
-                </Menu.Item>
+                {organizeMenuItems}
                 <Menu.Divider />
                 <DeleteMenuItems
                   disabled={busy}
@@ -482,6 +532,9 @@ export function LibraryMediaTable({
                   <Badge size="sm" variant="light" color={statusColor(item.status)}>
                     {t(`filters.${item.status}`)}
                   </Badge>
+                  <Text size="xs" c={item.organized ? "teal" : "dimmed"} mt={4}>
+                    {t(item.organized ? "organize.organized" : "organize.unorganized")}
+                  </Text>
                 </Table.Td>
                 <Table.Td style={CELL_OVERFLOW} visibleFrom={COLUMN_VISIBLE_FROM.size}>
                   <Text size="sm" truncate>

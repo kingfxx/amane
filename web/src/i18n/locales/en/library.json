@@ -20,7 +20,16 @@
     }
   },
   "organize": {
-    "tooltip": "Organize"
+    "tooltip": "Organize",
+    "reorganize": "Reorganize",
+    "reorganizeHint": "Apply the current library templates to the selected scope, including organized files. File paths and companion files will be rewritten.",
+    "markOrganized": "Mark as organized",
+    "markUnorganized": "Mark as unorganized",
+    "organized": "Organized",
+    "unorganized": "Unorganized",
+    "filter": "Organize status",
+    "marked_one": "Updated organize marker for {{count}} file",
+    "marked_other": "Updated organize markers for {{count}} files"
   },
   "columns": {
     "number": "Number",
@@ -87,7 +96,7 @@
   },
   "autoOrganize": {
     "label": "Auto organize",
-    "hint": "Organize the file automatically once it is scraped"
+    "hint": "After scraping, automatically organize the corresponding file if it is unorganized"
   },
   "ingest": {
     "label": "File discovery",

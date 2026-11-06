@@ -20,7 +20,15 @@
     }
   },
   "organize": {
-    "tooltip": "整理落盘"
+    "tooltip": "整理落盘",
+    "reorganize": "重新整理",
+    "reorganizeHint": "按当前媒体库模板重新整理所选范围, 包括已整理文件; 将调整文件路径并重写附属文件。",
+    "markOrganized": "标记为已整理",
+    "markUnorganized": "标记为未整理",
+    "organized": "已整理",
+    "unorganized": "未整理",
+    "filter": "整理状态",
+    "marked": "已更新 {{count}} 个文件的整理标记"
   },
   "columns": {
     "number": "番号",
@@ -85,7 +93,7 @@
   },
   "autoOrganize": {
     "label": "自动整理",
-    "hint": "刮削完成后自动整理相应文件"
+    "hint": "刮削完成后自动整理尚未整理的相应文件"
   },
   "ingest": {
     "label": "文件发现方式",

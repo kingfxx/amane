@@ -51,6 +51,7 @@ import { useUIStore } from "@/stores/ui";
 const libraryDetailSearchSchema = z.object({
   q: z.string().optional(),
   status: z.enum(MEDIA_FILE_STATUSES).optional(),
+  organized: z.enum(["yes", "no"]).optional(),
   sort_by: z.enum(MEDIA_SORT_FIELDS).optional(),
   order: z.enum(SORT_ORDERS).optional(),
   page: z.coerce.number().int().min(1).catch(1).default(1),
@@ -105,7 +106,9 @@ function LibraryDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<LibraryFormState>(emptyLibraryForm());
   const [searchInput, setSearchInput] = useResettingState(() => search.q ?? "", search.q);
-  const [advancedOpen, setAdvancedOpen] = useState(search.status != null);
+  const [advancedOpen, setAdvancedOpen] = useState(
+    search.status != null || search.organized != null,
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const offset = (search.page - 1) * listLimit;
@@ -115,6 +118,7 @@ function LibraryDetailPage() {
         library_id: id,
         search: search.q || undefined,
         status: search.status,
+        organized: search.organized == null ? undefined : search.organized === "yes",
         offset,
         limit: listLimit,
         sort_by: search.sort_by ?? "updated_at",
@@ -139,7 +143,7 @@ function LibraryDetailPage() {
   });
 
   const total = mediaQuery.data?.total ?? 0;
-  const hasStatusFilter = search.status != null;
+  const hasStatusFilter = search.status != null || search.organized != null;
   const statusOptions = useMemo(
     () => [
       { value: "", label: t("filters.all") },
@@ -268,25 +272,48 @@ function LibraryDetailPage() {
         }
         filterPanel={
           <Collapse expanded={narrow || advancedOpen}>
-            {narrow ? (
-              // 窄屏 SegmentedControl 宽度不足, 右侧选项被裁剪且无法滚动; 改用下拉完整列出.
+            <Stack gap="xs">
+              {narrow ? (
+                // 窄屏 SegmentedControl 宽度不足, 右侧选项被裁剪且无法滚动; 改用下拉完整列出.
+                <Select
+                  size="sm"
+                  allowDeselect={false}
+                  value={search.status ?? ""}
+                  onChange={setStatusFilter}
+                  data={statusOptions}
+                  aria-label={t("filters.title")}
+                  comboboxProps={{ withinPortal: !narrow }}
+                />
+              ) : (
+                <SegmentedControl
+                  size="sm"
+                  value={search.status ?? ""}
+                  onChange={setStatusFilter}
+                  data={statusOptions}
+                />
+              )}
               <Select
                 size="sm"
+                label={t("organize.filter")}
+                value={search.organized ?? ""}
                 allowDeselect={false}
-                value={search.status ?? ""}
-                onChange={setStatusFilter}
-                data={statusOptions}
-                aria-label={t("filters.title")}
+                data={[
+                  { value: "", label: t("filters.all") },
+                  { value: "yes", label: t("organize.organized") },
+                  { value: "no", label: t("organize.unorganized") },
+                ]}
+                onChange={(value) =>
+                  void routeNavigate({
+                    search: (prev) => ({
+                      ...prev,
+                      organized: value === "yes" || value === "no" ? value : undefined,
+                      page: 1,
+                    }),
+                  })
+                }
                 comboboxProps={{ withinPortal: !narrow }}
               />
-            ) : (
-              <SegmentedControl
-                size="sm"
-                value={search.status ?? ""}
-                onChange={setStatusFilter}
-                data={statusOptions}
-              />
-            )}
+            </Stack>
           </Collapse>
         }
       >
