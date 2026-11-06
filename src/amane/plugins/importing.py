@@ -40,8 +40,6 @@ def discover_imports(
     if not root.is_dir():
         raise ValueError("导入路径必须是目录")
     paths = provider.discover(root, recursive=recursive)
-    if len(paths) > 500:
-        raise ValueError("导入文件超过 500 个, 请缩小目录范围")
     return tuple(dict.fromkeys(_checked(path, root, safe_dirs) for path in paths))
 
 

@@ -4,6 +4,7 @@ import {
   Checkbox,
   Group,
   Modal,
+  Pagination,
   ScrollArea,
   Select,
   Stack,
@@ -17,6 +18,9 @@ import { executeImport, previewImport } from "@/client/sdk.gen";
 import type { ImportPreviewResponse } from "@/client/types.gen";
 import { PathPicker } from "@/components/path-picker";
 import { extractErrorMessage } from "@/lib/api-error";
+
+const IMPORT_BATCH_SIZE = 500;
+const PREVIEW_PAGE_SIZE = 50;
 
 export function ImportPanel({
   sourceId,
@@ -35,6 +39,8 @@ export function ImportPanel({
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const selectedPaths = new Set(selected);
   const libraries = useQuery({ ...listLibrariesOptions(), enabled: opened });
   const inspect = useMutation({
     mutationFn: async () => {
@@ -49,34 +55,40 @@ export function ImportPanel({
       setPreview(data);
       setSelected(data.items.filter((item) => item.candidate != null).map((item) => item.path));
       setSubmitted(null);
+      setPage(1);
     },
   });
   const execute = useMutation({
     mutationFn: async () => {
       if (!preview) throw new Error(t("import.previewRequired"));
-      const result = await executeImport({
-        body: {
-          items: preview.items.flatMap((item) => {
-            if (!item.candidate || !selected.includes(item.path)) return [];
-            return [
-              {
-                source_id: sourceId,
-                root: preview.root,
-                source_path: item.candidate.source_path,
-                source_hash: item.candidate.source_hash,
-                library_id: library ? Number(library) : null,
-                overwrite_existing: overwriteExisting,
-              },
-            ];
-          }),
-        },
-        throwOnError: true,
+      const items = preview.items.flatMap((item) => {
+        if (!item.candidate || !selectedPaths.has(item.path)) return [];
+        return [
+          {
+            source_id: sourceId,
+            root: preview.root,
+            source_path: item.candidate.source_path,
+            source_hash: item.candidate.source_hash,
+            library_id: library ? Number(library) : null,
+            overwrite_existing: overwriteExisting,
+          },
+        ];
       });
-      return result.data;
-    },
-    onSuccess: (data) => {
-      setSubmitted(data?.task_ids.length ?? 0);
-      setSelected([]);
+      for (let start = 0; start < items.length; start += IMPORT_BATCH_SIZE) {
+        const batch = items.slice(start, start + IMPORT_BATCH_SIZE);
+        const result = await executeImport({
+          body: { items: batch },
+          throwOnError: true,
+        });
+        const accepted = new Set(batch.map((item) => item.source_path));
+        const acceptedPaths = new Set(
+          preview.items
+            .filter((item) => item.candidate && accepted.has(item.candidate.source_path))
+            .map((item) => item.path),
+        );
+        setSelected((values) => values.filter((value) => !acceptedPaths.has(value)));
+        setSubmitted((value) => (value ?? 0) + result.data.task_ids.length);
+      }
     },
   });
   const pending = inspect.isPending || execute.isPending;
@@ -84,6 +96,7 @@ export function ImportPanel({
     setPreview(null);
     setSelected([]);
     setSubmitted(null);
+    setPage(1);
     inspect.reset();
     execute.reset();
   };
@@ -153,67 +166,77 @@ export function ImportPanel({
           <ScrollArea.Autosize mah={360}>
             <Stack gap="xs">
               {preview.items.length === 0 ? <Text>{t("import.empty")}</Text> : null}
-              {preview.items.map((item) => (
-                <Stack key={item.path} gap={2}>
-                  <Checkbox
-                    disabled={pending || !item.candidate}
-                    checked={selected.includes(item.path)}
-                    onChange={(event) => {
-                      const checked = event.currentTarget.checked;
-                      setSelected((values) =>
-                        checked
-                          ? [...values, item.path]
-                          : values.filter((value) => value !== item.path),
-                      );
-                    }}
-                    label={
-                      item.candidate
-                        ? `${item.candidate.metadata.number} · ${item.candidate.metadata.title ?? ""}`
-                        : item.path
-                    }
-                  />
-                  <Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
-                    {item.path}
-                  </Text>
-                  {item.error ? (
-                    <Text size="sm" c="red">
-                      {item.error}
+              {preview.items
+                .slice((page - 1) * PREVIEW_PAGE_SIZE, page * PREVIEW_PAGE_SIZE)
+                .map((item) => (
+                  <Stack key={item.path} gap={2}>
+                    <Checkbox
+                      disabled={pending || !item.candidate}
+                      checked={selectedPaths.has(item.path)}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setSelected((values) =>
+                          checked
+                            ? [...values, item.path]
+                            : values.filter((value) => value !== item.path),
+                        );
+                      }}
+                      label={
+                        item.candidate
+                          ? `${item.candidate.metadata.number} · ${item.candidate.metadata.title ?? ""}`
+                          : item.path
+                      }
+                    />
+                    <Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
+                      {item.path}
                     </Text>
-                  ) : null}
-                  {item.existing_metadata_id ? (
-                    <Text size="xs" c="orange">
-                      {overwriteExisting ? t("import.overwriteNotice") : t("import.fillOnly")}
-                    </Text>
-                  ) : null}
-                  {item.candidate ? (
-                    <>
-                      {(item.candidate.warnings ?? []).map((warning) => (
-                        <Text size="xs" c="orange" key={warning}>
-                          {warning}
-                        </Text>
-                      ))}
-                      <Text size="xs">
-                        {t("import.counts", {
-                          images: item.candidate.images?.length ?? 0,
-                          files: item.candidate.media_paths?.length ?? 0,
-                        })}
+                    {item.error ? (
+                      <Text size="sm" c="red">
+                        {item.error}
                       </Text>
-                      {(item.candidate.metadata.trailer_urls ?? []).map((url) => (
-                        <Text size="xs" key={url} style={{ overflowWrap: "anywhere" }}>
-                          {t("import.remoteTrailer", { path: url })}
+                    ) : null}
+                    {item.existing_metadata_id ? (
+                      <Text size="xs" c="orange">
+                        {overwriteExisting ? t("import.overwriteNotice") : t("import.fillOnly")}
+                      </Text>
+                    ) : null}
+                    {item.candidate ? (
+                      <>
+                        {(item.candidate.warnings ?? []).map((warning) => (
+                          <Text size="xs" c="orange" key={warning}>
+                            {warning}
+                          </Text>
+                        ))}
+                        <Text size="xs">
+                          {t("import.counts", {
+                            images: item.candidate.images?.length ?? 0,
+                            files: item.candidate.media_paths?.length ?? 0,
+                          })}
                         </Text>
-                      ))}
-                      {(item.candidate.local_trailer_paths ?? []).map((local) => (
-                        <Text size="xs" key={local} style={{ overflowWrap: "anywhere" }}>
-                          {t("import.localTrailer", { path: local })}
-                        </Text>
-                      ))}
-                    </>
-                  ) : null}
-                </Stack>
-              ))}
+                        {(item.candidate.metadata.trailer_urls ?? []).map((url) => (
+                          <Text size="xs" key={url} style={{ overflowWrap: "anywhere" }}>
+                            {t("import.remoteTrailer", { path: url })}
+                          </Text>
+                        ))}
+                        {(item.candidate.local_trailer_paths ?? []).map((local) => (
+                          <Text size="xs" key={local} style={{ overflowWrap: "anywhere" }}>
+                            {t("import.localTrailer", { path: local })}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+                  </Stack>
+                ))}
             </Stack>
           </ScrollArea.Autosize>
+        ) : null}
+        {preview && preview.items.length > PREVIEW_PAGE_SIZE ? (
+          <Pagination
+            total={Math.ceil(preview.items.length / PREVIEW_PAGE_SIZE)}
+            value={page}
+            onChange={setPage}
+            disabled={pending}
+          />
         ) : null}
         {submitted != null ? (
           <Alert color="teal">{t("import.submitted", { count: submitted })}</Alert>

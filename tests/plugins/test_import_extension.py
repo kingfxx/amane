@@ -21,6 +21,23 @@ def nfo_provider() -> ImportProvider:
     return loaded.plugin.build_importer(loaded.plugin.configuration_model()())
 
 
+@pytest.mark.asyncio
+async def test_discover_large_nfo_directory(nfo_provider: ImportProvider, tmp_path: Path) -> None:
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    expected = []
+    for index in range(501):
+        path = nested / f"ABC-{index:03}.nfo"
+        path.write_text("<movie/>", encoding="utf-8")
+        expected.append(path)
+    (nested / "notes.txt").write_text("notes", encoding="utf-8")
+    trash = nested / ".amane_trash"
+    trash.mkdir()
+    (trash / "ABC-999.nfo").write_text("<movie/>", encoding="utf-8")
+    assert await discover_imports(nfo_provider, tmp_path, False, [tmp_path]) == ()
+    assert await discover_imports(nfo_provider, tmp_path, True, [tmp_path]) == tuple(sorted(expected))
+
+
 def test_nfo_parsing_and_invalid_inputs(nfo_provider: ImportProvider, tmp_path: Path) -> None:
     path = tmp_path / "JUR-840.nfo"
     cases = [

@@ -51,6 +51,9 @@ async def test_import_api_install_preview_execute_and_errors(client: AsyncClient
     assert (await client.post("imports/execute", json=body)).status_code == 409
     assert (await client.post("imports/preview", json={**request, "path": str(tmp_path)})).status_code == 403
     assert (await client.post("imports/execute", json={"items": []})).status_code == 422
+    oversized = await client.post("imports/execute", json={"items": body["items"] * 501})
+    assert oversized.status_code == 422
+    assert oversized.json()["detail"][0]["type"] == "too_long"
     assert (
         await client.post("imports/execute", json={"items": [{**body["items"][0], "overwrite_existing": "invalid"}]})
     ).status_code == 422

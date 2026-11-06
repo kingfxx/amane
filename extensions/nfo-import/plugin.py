@@ -122,8 +122,6 @@ class NfoProvider(ImportProvider):
             if ".amane_trash" in path.parts or path.suffix.casefold() != ".nfo" or not path.is_file():
                 continue
             result.append(path)
-            if len(result) > 500:
-                raise ValueError("NFO 超过 500 个, 请缩小目录范围后分批导入")
         return tuple(sorted(result))
 
     @override
@@ -272,7 +270,7 @@ class Plugin(ImportPlugin):
         return SourceDescriptor(
             id="local.nfo",
             name="本地 NFO 导入",
-            version="0.1.1",
+            version="0.1.2",
             capabilities=frozenset({SourceCapability.METADATA_IMPORT}),
         )
 
