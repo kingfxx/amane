@@ -144,3 +144,16 @@ def test_sdk_hides_host_runtime() -> None:
     for name in ("PluginManager", "PluginOrigin", "PluginConfig", "PluginLoadFailure"):
         assert name not in sdk.__all__
         assert not hasattr(sdk, name)
+
+
+@pytest.mark.parametrize(
+    ("processed", "total", "message"),
+    [
+        (-1, 1, "greater than or equal"),
+        (2, 1, "处理数量不能超过总数"),
+        (0, -1, "greater than or equal"),
+    ],
+)
+def test_import_progress_rejects_invalid_counts(processed: int, total: int, message: str) -> None:
+    with pytest.raises(ValidationError, match=message):
+        ImportProgress(phase="cache", processed=processed, total=total)

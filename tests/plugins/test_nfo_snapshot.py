@@ -18,6 +18,8 @@ def test_plugin_snapshot_restore_and_invalid_cache(nfo_provider: SnapshotImportP
     cache.mkdir()
     context = ImportContext(root=cloud, source=source, cache_dir=cache)
     updates: list[ImportProgress] = []
+    assert nfo_provider.discover_with_progress(cloud, recursive=False, report=updates.append) == (source,)
+    assert updates[-1].phase == "discover" and updates[-1].processed == updates[-1].total == 1
     prepared = nfo_provider.prepare(context, updates.append)
     assert prepared.candidate.metadata.title == "预览标题"
     assert prepared.media[0].path == str(video) and prepared.media[0].size == 5

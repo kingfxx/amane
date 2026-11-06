@@ -387,6 +387,14 @@ class ImportProvider(ABC):
 class SnapshotImportProvider(ImportProvider):
     """导入契约 v2: 只向分配的缓存目录写入; 恢复不访问来源目录."""
 
+    def discover_with_progress(
+        self, root: Path, *, recursive: bool, report: Callable[[ImportProgress], None]
+    ) -> tuple[Path, ...]:
+        report(ImportProgress(phase="discover", processed=0))
+        sources = self.discover(root, recursive=recursive)
+        report(ImportProgress(phase="discover", processed=len(sources), total=len(sources)))
+        return sources
+
     @abstractmethod
     def prepare(self, context: ImportContext, report: Callable[[ImportProgress], None]) -> PreparedImport: ...
 
@@ -395,7 +403,7 @@ class SnapshotImportProvider(ImportProvider):
 
 
 class ImportPlugin(_ConfiguredPlugin):
-    """通用导入契约 v1; 与现有来源 API v1 并存, 不改变已有插件接口."""
+    """导入契约独立于来源 API; v1 读取候选, v2 支持插件快照."""
 
     import_api_version: ClassVar[int] = 1
 

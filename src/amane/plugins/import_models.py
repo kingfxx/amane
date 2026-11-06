@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..crawlers.models import MediaMetadata
 
@@ -40,6 +40,12 @@ class ImportProgress(BaseModel):
     phase: Literal["discover", "read", "cache", "restore"]
     processed: int = Field(ge=0)
     total: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> ImportProgress:
+        if self.total is not None and self.processed > self.total:
+            raise ValueError("处理数量不能超过总数")
+        return self
 
 
 class ImportMedia(BaseModel):

@@ -204,11 +204,28 @@ class NfoProvider(SnapshotImportProvider):
 
     @override
     def discover(self, root: Path, *, recursive: bool) -> tuple[Path, ...]:
+        return self._discover(root, recursive=recursive, report=None)
+
+    @override
+    def discover_with_progress(
+        self, root: Path, *, recursive: bool, report: Callable[[ImportProgress], None]
+    ) -> tuple[Path, ...]:
+        return self._discover(root, recursive=recursive, report=report)
+
+    def _discover(
+        self, root: Path, *, recursive: bool, report: Callable[[ImportProgress], None] | None
+    ) -> tuple[Path, ...]:
         result: list[Path] = []
+        if report:
+            report(ImportProgress(phase="discover", processed=0))
         for path in root.glob("**/*" if recursive else "*"):
             if ".amane_trash" in path.parts or path.suffix.casefold() != ".nfo" or not path.is_file():
                 continue
             result.append(path)
+            if report:
+                report(ImportProgress(phase="discover", processed=len(result)))
+        if report:
+            report(ImportProgress(phase="discover", processed=len(result), total=len(result)))
         return tuple(sorted(result))
 
     @override
