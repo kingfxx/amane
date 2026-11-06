@@ -68,7 +68,7 @@ macOS UI argv (`AmaneUI --base-url http://127.0.0.1:PORT [--token <token>] [--wa
 
 ## 打包
 
-macOS: `scripts/build_macos_app.sh` (`just macos-app`), 需要 Swift 工具链 — PyInstaller 打成 onedir 后再组装 `.app`, `AmaneUI` 包成 `Contents/Resources/AmaneUI.app`, Info.plist 补 `LSUIElement` / `LSMultipleInstancesProhibited` / `CFBundleIconFile`. Windows: `scripts/build_windows_app.ps1` (`just windows-app`), **必须在 Windows 上运行** (PyInstaller 与 Native AOT 都不能从 macOS 交叉), 需要 .NET 8 SDK + 能链 Native AOT 的 MSVC.
+macOS: `scripts/build_macos_app.sh` (`just macos-app`), 需要 Swift 工具链 — PyInstaller 打成 onedir 后再组装 `.app`, `AmaneUI` 包成 `Contents/Resources/AmaneUI.app`, Info.plist 补 `LSUIElement` / `LSMultipleInstancesProhibited` / `CFBundleIconFile`. Windows: `scripts/build_windows_app.ps1` (`just windows-app`), **必须在 Windows 上运行**, 需要 .NET 8 SDK; 默认 Native AOT 还需 MSVC, `just windows-app -Managed` 则生成自包含单文件托盘, 无需 MSVC 或目标机器预装 .NET.
 
 两边 PyInstaller 都要打进 `amane/db/migrations` 与 `amane/media/watermarks`, 并按平台收集整个标准库 (见 `scripts/stdlib_modules.py`). **插件是运行时从数据目录动态加载的**, PyInstaller 的静态导入图看不见它们引用什么; 只收标准库之外的部分会让插件在桌面版报 `ModuleNotFoundError`. 简繁转换的内置词表 `amane/utils/zhcdict.json` 同样不在静态导入图内, 两个打包脚本都必须用 `--add-data` 收集; 桌面包缺失该文件时简繁转换失败.
 

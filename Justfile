@@ -181,8 +181,8 @@ macos-app: sync build
     bash scripts/build_macos_app.sh
 
 # Windows-only: sync → web → frontend build → PyInstaller onedir + Native AOT shell
-windows-app: sync build
-    pwsh -NoProfile -File scripts/build_windows_app.ps1
+windows-app *args: sync build
+    pwsh -NoProfile -File scripts/build_windows_app.ps1 {{args}}
 
 # SPA 由服务端提供, 不依赖 web/dist; 无 androidapp/keystore.properties 时退回 debug 包
 # 构建 Android 壳的 APK (需 JDK 17+ 与 Android SDK)

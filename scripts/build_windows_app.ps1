@@ -6,10 +6,12 @@
 # Env:
 #   AMANE_WINDOWS_APP_OUT   output dir (default: dist/Amane)
 #   AMANE_WINDOWS_APP_WORK  work dir (default: dist/windows-app-work)
+param([switch]$Managed)
+
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
 
-if ($env:OS -ne "Windows_NT") {
+if (-not $IsWindows) {
     Write-Error "scripts/build_windows_app.ps1 is Windows-only"
     exit 1
 }
@@ -97,12 +99,17 @@ if ($LASTEXITCODE -ne 0 -or -not $Version) {
 }
 
 $ShellOut = Join-Path $Work "shell"
+$ShellArgs = @()
+if ($Managed) {
+    $ShellArgs = @("/p:PublishAot=false", "/p:PublishSingleFile=true", "/p:IncludeNativeLibrariesForSelfExtract=true")
+}
 dotnet publish (Join-Path $Root "winapp\Amane.csproj") `
     -c Release `
     -r win-x64 `
     --self-contained `
     -o $ShellOut `
-    /p:Version="$Version"
+    /p:Version="$Version" `
+    @ShellArgs
 if ($LASTEXITCODE -ne 0) {
     Write-Error "dotnet publish failed"
     exit 1
