@@ -4,21 +4,28 @@ import codecs
 import hashlib
 import math
 import re
+import unicodedata
+from collections.abc import Callable
 from pathlib import Path
-from typing import Literal, override
+from typing import ClassVar, Literal, override
 from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
 from xml.parsers import expat
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from amane.plugin import (
     FilmActor,
     ImportCandidate,
+    ImportContext,
     ImportImage,
+    ImportMedia,
     ImportPlugin,
+    ImportProgress,
     ImportProvider,
     MediaMetadata,
+    PreparedImport,
+    SnapshotImportProvider,
     SourceCapability,
     SourceDescriptor,
     extract_number,
@@ -114,7 +121,87 @@ def _local(path: Path, parent: Path) -> Path | None:
     return resolved if resolved.is_file() else None
 
 
-class NfoProvider(ImportProvider):
+class NfoSnapshot(BaseModel):
+    version: Literal[1] = 1
+    prepared: PreparedImport
+    source_file: str
+
+
+def _cache_file(context: ImportContext, name: str) -> Path:
+    if Path(name).name != name or name in {"", ".", ".."}:
+        raise ValueError("NFO 缓存文件名无效")
+    path = (context.cache_dir / name).resolve()
+    if not path.is_relative_to(context.cache_dir.resolve()) or not path.is_file():
+        raise ValueError("NFO 缓存文件缺失或超出缓存目录, 请重新预览")
+    return path
+
+
+class NfoProvider(SnapshotImportProvider):
+    @override
+    def prepare(self, context: ImportContext, report: Callable[[ImportProgress], None]) -> PreparedImport:
+        report(ImportProgress(phase="read", processed=0, total=1))
+        candidate = self.read(context.source)
+        data = candidate.source_bytes
+        if data is None or hashlib.sha256(data).hexdigest() != candidate.source_hash:
+            raise ValueError("NFO 来源内容与解析结果不匹配")
+        candidate.source_bytes = None
+        (context.cache_dir / "source.nfo").write_bytes(data)
+        report(ImportProgress(phase="read", processed=1, total=1))
+        copied: dict[str, str] = {}
+        images: list[ImportImage] = []
+        report(ImportProgress(phase="cache", processed=0, total=len(candidate.images)))
+        for index, image in enumerate(candidate.images):
+            name = copied.get(image.path)
+            if name is None:
+                local = _local(Path(image.path), context.root)
+                if local is None:
+                    raise ValueError("NFO 图片不存在")
+                name = f"image-{len(copied)}{local.suffix}"
+                with local.open("rb") as stream:
+                    content = stream.read(32 * 1024 * 1024 + 1)
+                if len(content) > 32 * 1024 * 1024:
+                    raise ValueError("导入图片超过 32 MiB")
+                (context.cache_dir / name).write_bytes(content)
+                copied[image.path] = name
+            images.append(ImportImage(kind=image.kind, path=name))
+            report(ImportProgress(phase="cache", processed=index + 1, total=len(candidate.images)))
+        extensions: dict[Path, list[str]] = {}
+        media: list[ImportMedia] = []
+        for value in candidate.media_paths:
+            path = _local(Path(value), context.root)
+            if path is None:
+                raise ValueError("NFO 关联正片不存在")
+            if path.parent not in extensions:
+                extensions[path.parent] = sorted(
+                    {item.suffix.lower() for item in path.parent.iterdir() if item.is_file()}
+                )
+            media.append(
+                ImportMedia(
+                    path=unicodedata.normalize("NFC", str(path)),
+                    size=path.stat().st_size,
+                    subtitle_extensions=extensions[path.parent],
+                )
+            )
+        prepared = PreparedImport(candidate=candidate, images=images, media=media)
+        snapshot = NfoSnapshot(prepared=prepared, source_file="source.nfo")
+        (context.cache_dir / "nfo-snapshot.json").write_text(snapshot.model_dump_json(), encoding="utf-8")
+        return self.restore(context)
+
+    @override
+    def restore(self, context: ImportContext) -> PreparedImport:
+        try:
+            snapshot = NfoSnapshot.model_validate_json(
+                _cache_file(context, "nfo-snapshot.json").read_text(encoding="utf-8")
+            )
+        except ValidationError as exc:
+            raise ValueError("NFO 快照版本或格式不兼容, 请重新预览") from exc
+        source = _cache_file(context, snapshot.source_file)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != snapshot.prepared.candidate.source_hash:
+            raise ValueError("NFO 缓存来源内容无效, 请重新预览")
+        for image in snapshot.prepared.images:
+            image.path = str(_cache_file(context, image.path))
+        return snapshot.prepared
+
     @override
     def discover(self, root: Path, *, recursive: bool) -> tuple[Path, ...]:
         result: list[Path] = []
@@ -265,13 +352,15 @@ class NfoProvider(ImportProvider):
 
 
 class Plugin(ImportPlugin):
+    import_api_version: ClassVar[int] = 2
+
     @classmethod
     @override
     def descriptor(cls) -> SourceDescriptor:
         return SourceDescriptor(
             id="local.nfo",
             name="本地 NFO 导入",
-            version="0.1.3",
+            version="0.2.0",
             capabilities=frozenset({SourceCapability.METADATA_IMPORT}),
         )
 
