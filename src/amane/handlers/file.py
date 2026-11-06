@@ -630,7 +630,13 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
 
         pruned_dirs = 0
         if prune_candidates:
-            pruned_dirs = (await prune_empty_dirs(prune_candidates, library_root=library_root)).removed
+            pruned_dirs = (
+                await prune_empty_dirs(
+                    prune_candidates,
+                    library_root=library_root,
+                    protected_dir=Path(library.scan_path) if library.scan_path else None,
+                )
+            ).removed
 
         logger.info(
             "organize completed",

@@ -1428,6 +1428,36 @@ async def test_organize_prunes_emptied_source_dir(
 
 
 @pytest.mark.asyncio(loop_scope="function")
+@pytest.mark.parametrize("nested", [False, True])
+async def test_organize_preserves_incoming_root(
+    repo: Repository, resource_store: ResourceStore, tmp_path: Path, nested: bool
+) -> None:
+    lib_root = tmp_path / "lib"
+    library_id, src = await _seed_movable_video(repo, lib_root)
+    incoming = src.parent
+    await repo.update_library(library_id, scan_path=str(incoming))
+    if nested:
+        empty_child = incoming / "empty"
+        empty_child.mkdir()
+        row = await repo.get_media_file_by_path(str(src))
+        assert row is not None and row.id is not None
+        moved = empty_child / src.name
+        src.rename(moved)
+        await repo.update_media_file(row.id, path=str(moved))
+        src = moved
+    org = OrganizeHandler(repo, HotSettings(), resource_store)
+    payload = OrganizePayload(library_id=library_id)
+    await payload.resolve(repo)
+    result = await org.handle(payload)
+    assert result.success and result.result is not None
+    assert result.result.organized == 1
+    assert result.result.pruned_dirs == int(nested)
+    assert incoming.is_dir()
+    assert list(incoming.iterdir()) == []
+    assert not src.exists()
+
+
+@pytest.mark.asyncio(loop_scope="function")
 async def test_organize_keeps_source_dir_when_prune_disabled(
     repo: Repository, resource_store: ResourceStore, tmp_path: Path
 ) -> None:

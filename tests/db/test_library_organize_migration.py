@@ -12,6 +12,30 @@ from sqlalchemy import create_engine, inspect, text
 from tests.helpers import alembic_config
 
 
+def test_library_scan_path_upgrade_preserves_existing_library(tmp_path: Path) -> None:
+    cfg = alembic_config(tmp_path / "migrate.db")
+    command.upgrade(cfg, "0b4c0aba7e89")
+    engine = create_engine(f"sqlite:///{tmp_path / 'migrate.db'}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO libraries (name, path, recursive, patterns, video_template) "
+                "VALUES ('existing', '/media', 1, '[]', '{number}/{number}.{ext}')"
+            )
+        )
+    command.upgrade(cfg, "cd1982e1fdac")
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT name, path, scan_path FROM libraries")).one()
+        assert row.name == "existing"
+        assert row.path == "/media"
+        assert row.scan_path is None
+    command.downgrade(cfg, "0b4c0aba7e89")
+    with engine.connect() as conn:
+        assert "scan_path" not in {column["name"] for column in inspect(conn).get_columns("libraries")}
+        assert conn.execute(text("SELECT path FROM libraries")).scalar_one() == "/media"
+    engine.dispose()
+
+
 def test_library_organize_columns_backfill_existing_rows(tmp_path: Path) -> None:
     db_path = tmp_path / "migrate.db"
     cfg = alembic_config(db_path)

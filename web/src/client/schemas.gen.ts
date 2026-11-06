@@ -4528,6 +4528,17 @@ export const LibraryCreateRequestSchema = {
             type: 'string',
             title: 'Path'
         },
+        scan_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Scan Path'
+        },
         automation: {
             $ref: '#/components/schemas/LibraryAutomation',
             default: 'scrape'
@@ -4768,6 +4779,17 @@ export const LibraryResponseSchema = {
             type: 'string',
             title: 'Path'
         },
+        scan_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Scan Path'
+        },
         automation: {
             $ref: '#/components/schemas/LibraryAutomation'
         },
@@ -4989,6 +5011,17 @@ export const LibraryUpdateRequestSchema = {
                 }
             ],
             title: 'Path'
+        },
+        scan_path: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Scan Path'
         },
         automation: {
             anyOf: [

@@ -2328,6 +2328,10 @@ export type LibraryCreateRequest = {
      * Path
      */
     path: string;
+    /**
+     * Scan Path
+     */
+    scan_path?: string | null;
     automation?: LibraryAutomation;
     /**
      * Auto Organize
@@ -2451,6 +2455,10 @@ export type LibraryResponse = {
      * Path
      */
     path: string;
+    /**
+     * Scan Path
+     */
+    scan_path?: string | null;
     automation: LibraryAutomation;
     /**
      * Auto Organize
@@ -2549,6 +2557,10 @@ export type LibraryUpdateRequest = {
      * Path
      */
     path?: string | null;
+    /**
+     * Scan Path
+     */
+    scan_path?: string | null;
     automation?: LibraryAutomation | null;
     /**
      * Auto Organize

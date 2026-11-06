@@ -34,6 +34,7 @@ class LibraryCreateRequest(BaseModel):
     name: str | None = None
     """显示名; 留空则取路径 basename."""
     path: str
+    scan_path: str | None = None
     automation: LibraryAutomation = LibraryAutomation.SCRAPE
     auto_organize: bool = False
     ingest: LibraryIngest = LibraryIngest.NATIVE
@@ -80,6 +81,7 @@ class LibraryResponse(BaseModel):
     id: int
     name: str
     path: str
+    scan_path: str | None = None
     automation: LibraryAutomation
     auto_organize: bool
     ingest: LibraryIngest

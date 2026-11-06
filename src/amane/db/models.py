@@ -377,6 +377,8 @@ class Library(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False)
     path: str = Field(nullable=False)
+    scan_path: str | None = None
+    """扫描新文件的默认范围; 为空时使用库根, 非空时必须位于库内."""
     automation: LibraryAutomation = Field(default=LibraryAutomation.SCRAPE)
     """自动化级别: none 不监控 / watch 仅入库 / scrape 入库并自动刮削. 库本身始终有效."""
     auto_organize: bool = Field(default=False)

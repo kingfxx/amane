@@ -60,6 +60,7 @@ class ScanInvalidHandler(TaskHandler[ScanInvalidPayload, ScanInvalidResult]):
             recursive=recursive,
             patterns=payload.patterns or [],
             scan=scan,
+            protected_dir=Path(library.scan_path) if library.scan_path else None,
             orphan_scan=OrphanScan.from_library(
                 library_root=library_root,
                 scope_dir=scope_dir,

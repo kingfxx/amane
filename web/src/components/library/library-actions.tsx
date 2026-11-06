@@ -118,6 +118,7 @@ export function LibraryActionButtons({
                 body: {
                   type: "refresh",
                   library_id: library.id,
+                  path: library.scan_path ?? "",
                   scan: ["add"],
                   scrape: ["pending"],
                 },

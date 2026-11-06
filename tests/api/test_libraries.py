@@ -23,6 +23,42 @@ def _set_library_path(db_path: Path, library_id: int, path: str) -> None:
 
 class TestLibraries:
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_scan_path_configuration(self, client: AsyncClient, repo: Repository, safe_path: Path) -> None:
+        root = safe_path / "library"
+        incoming = root / "incoming"
+        incoming.mkdir(parents=True)
+        outside = safe_path / "outside"
+        outside.mkdir()
+        not_directory = root / "MIDV-901.mp4"
+        not_directory.touch()
+        created = await client.post(
+            "libraries",
+            json={"path": str(root), "scan_path": "incoming", "automation": "none", "scan": True},
+        )
+        assert created.status_code == 201
+        library_id = created.json()["id"]
+        assert created.json()["scan_path"] == str(incoming)
+        tasks = await repo.list_tasks(task_types=[TaskType.REFRESH])
+        assert [t.payload["path"] for t in tasks if t.payload["library_id"] == library_id] == [str(incoming)]
+        for value, status, detail in [
+            (str(outside), 422, "待刮削路径必须位于媒体库路径内"),
+            ("../outside", 422, "待刮削路径必须位于媒体库路径内"),
+            ("missing", 404, "路径不存在"),
+            (str(not_directory), 400, "不是目录"),
+        ]:
+            rejected = await client.patch(f"libraries/{library_id}", json={"scan_path": value})
+            assert rejected.status_code == status
+            assert detail in rejected.json()["detail"]
+        unchanged = await client.get(f"libraries/{library_id}")
+        assert unchanged.json()["scan_path"] == str(incoming)
+        moved_root = await client.patch(f"libraries/{library_id}", json={"path": str(outside)})
+        assert moved_root.status_code == 422
+        for empty in [None, "", "   "]:
+            cleared = await client.patch(f"libraries/{library_id}", json={"scan_path": empty})
+            assert cleared.status_code == 200
+            assert cleared.json()["scan_path"] is None
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_crud_and_defaults(self, client: AsyncClient, repo: Repository, safe_path: Path):
         empty = await client.get("libraries")
         assert empty.status_code == 200

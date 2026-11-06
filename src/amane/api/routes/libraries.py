@@ -42,6 +42,8 @@ async def list_libraries(repo: RepoDep) -> LibraryListResponse:
 async def create_library(req: LibraryCreateRequest, repo: RepoDep, runtime: RuntimeDep) -> LibraryResponse:
     # 校验路径: 须存在、是目录、位于 safe_dirs 内
     await validate_directory_path(req.path, runtime.safe_dirs)
+    if req.scan_path and req.scan_path.strip():
+        await validate_directory_path(str(Path(req.path) / req.scan_path.strip()), runtime.safe_dirs)
 
     name = req.name or Path(req.path).name
 
@@ -49,6 +51,7 @@ async def create_library(req: LibraryCreateRequest, repo: RepoDep, runtime: Runt
         lib = await repo.create_library(
             name=name,
             path=req.path,
+            scan_path=req.scan_path,
             automation=req.automation,
             auto_organize=req.auto_organize,
             ingest=req.ingest,
@@ -99,7 +102,7 @@ async def create_library(req: LibraryCreateRequest, repo: RepoDep, runtime: Runt
                 recursive=req.recursive,
                 patterns=req.patterns,
                 # 用落库后的路径: 入口已把库路径解析为真实路径, 首次扫描必须与它同一形式.
-                path=lib.path,
+                path=lib.scan_path or lib.path,
                 scan={ScanMode.add},
                 scrape=set(),
             ),
@@ -130,6 +133,12 @@ async def update_library(
     # 仅 path 被显式更新时才校验
     if "path" in updates and updates["path"] is not None:
         await validate_directory_path(updates["path"], runtime.safe_dirs)
+    if "scan_path" in updates and updates["scan_path"] and updates["scan_path"].strip():
+        existing = await repo.get_library(library_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="媒体库不存在")
+        root = updates.get("path", existing.path)
+        await validate_directory_path(str(Path(root) / updates["scan_path"].strip()), runtime.safe_dirs)
 
     try:
         lib = await repo.update_library(library_id, **updates)

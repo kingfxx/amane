@@ -645,6 +645,43 @@ class TestScrapeTranslation:
 
 class TestRefreshHandler:
     @pytest.mark.asyncio(loop_scope="function")
+    @pytest.mark.parametrize("scan", [{ScanMode.add}, {ScanMode.add, ScanMode.remove}, {ScanMode.remove}])
+    async def test_subdirectory_limits_registration_removal_and_scrape(
+        self, repo: Repository, tmp_path: Path, scan: set[ScanMode]
+    ) -> None:
+        incoming = tmp_path / "incoming"
+        incoming.mkdir()
+        sibling = tmp_path / "incoming-other"
+        sibling.mkdir()
+        new_video = incoming / "MIDV-901.mp4"
+        new_video.touch()
+        outside_video = sibling / "MIDV-902.mp4"
+        outside_video.touch()
+        library = await repo.create_library(name="t", path=str(tmp_path), scan_path="incoming")
+        assert library.id is not None
+        outside_media = await repo.create_media_file(library_id=library.id, path=str(outside_video))
+        outside_missing = await repo.create_media_file(library_id=library.id, path=str(sibling / "MIDV-903.mp4"))
+        inside_missing = await repo.create_media_file(
+            library_id=library.id, path=str(incoming / "MIDV-904.mp4"), status=MediaFileStatus.SCRAPED
+        )
+        result = await RefreshHandler(repo).handle(
+            RefreshPayload(library_id=library.id, path=library.scan_path or library.path, scan=scan)
+        )
+        assert result.success
+        assert result.result is not None
+        assert result.result.added == int(ScanMode.add in scan)
+        assert result.result.removed == int(ScanMode.remove in scan)
+        assert result.result.scrape == int(ScanMode.add in scan)
+        remaining = await repo.list_media_files(library_id=library.id, limit=None)
+        ids = {f.id for f in remaining}
+        assert {outside_media.id, outside_missing.id} <= ids
+        assert (inside_missing.id not in ids) == (ScanMode.remove in scan)
+        new_media = await repo.get_media_file_by_path(str(new_video))
+        assert [f.payload["media_file_id"] for f in result.followups] == (
+            [new_media.id] if new_media is not None else []
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_scan_and_add_files(self, repo: Repository, tmp_path):
         """扫描目录, 注册新文件"""
         (tmp_path / "MIDV-123.mp4").write_bytes(b"\x00" * 100)

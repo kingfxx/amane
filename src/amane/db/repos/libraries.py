@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Unpack
 
 from sqlmodel import col, select
@@ -17,7 +18,7 @@ from ...library import (
 )
 from ...organize.path_templates import VIDEO_TEMPLATE_DEFAULT, normalize_link_template, validate_path_template
 from ...organize.strm_content import normalize_strm_content_template, validate_strm_content_template
-from ...utils.path import resolved_path
+from ...utils.path import path_is_under, resolved_path
 from ..models import Library, MediaFile
 from ..repo_types import LibraryUpdates
 from .base import RepositoryMixinBase
@@ -30,6 +31,17 @@ def _path_template_or_none(value: str | None) -> str | None:
 def _strm_content_or_none(value: str | None) -> str | None:
     normalized = normalize_strm_content_template(value)
     return None if normalized is None else validate_strm_content_template(normalized)
+
+
+def _normalize_scan_path(value: str | None, library_path: str) -> str | None:
+    if value is None or not value.strip():
+        return None
+    root = resolved_path(library_path)
+    candidate = resolved_path(root / value.strip())
+    if not path_is_under(candidate, root):
+        raise ValueError("待刮削路径必须位于媒体库路径内")
+    # 保持旧库的字面路径形式, 与已有文件索引一致.
+    return str(Path(library_path) / candidate.relative_to(root))
 
 
 async def _reject_overlapping_cloud_path(
@@ -76,6 +88,7 @@ class LibrariesRepoMixin(RepositoryMixinBase):
         trailer_pattern: str | None = None,
         blacklist_patterns: list[str] | None = None,
         min_file_size: int = 0,
+        scan_path: str | None = None,
     ) -> Library:
         min_file_size = validate_min_file_size(min_file_size)
         cloud_path = resolve_ingest_cloud_path(ingest, cloud_path)
@@ -95,6 +108,7 @@ class LibrariesRepoMixin(RepositoryMixinBase):
             lib = Library(
                 name=name,
                 path=str(resolved_path(path)),
+                scan_path=_normalize_scan_path(scan_path, str(resolved_path(path))),
                 automation=automation,
                 auto_organize=auto_organize,
                 ingest=ingest,
@@ -187,6 +201,8 @@ class LibrariesRepoMixin(RepositoryMixinBase):
             # 仅仅重新保存一次就把库根换成另一种写法, 会把同一个文件算成两条索引.
             if "path" in updates and updates["path"] != lib.path:
                 lib.path = str(resolved_path(updates["path"]))
+            if "scan_path" in updates or "path" in updates:
+                lib.scan_path = _normalize_scan_path(updates.get("scan_path", lib.scan_path), lib.path)
             if "automation" in updates:
                 lib.automation = updates["automation"]
             if "auto_organize" in updates:

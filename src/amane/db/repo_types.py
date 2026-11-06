@@ -316,6 +316,7 @@ class MediaFileUpdates(TypedDict, total=False):
 class LibraryUpdates(TypedDict, total=False):
     name: str
     path: str
+    scan_path: str | None
     automation: LibraryAutomation
     auto_organize: bool
     ingest: LibraryIngest

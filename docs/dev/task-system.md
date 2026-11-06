@@ -45,6 +45,8 @@ ORGANIZE 只读取范围内的 `MediaFile` 行: 缺省为该库全部索引, 显
 
 ## REFRESH 组合开关
 
+媒体库“扫描新文件”按钮与建库初扫使用 `Library.scan_path` (空则库根); 其它任务范围仍由提交参数决定. `RefreshHandler.handle` 的增删与刮削后继均限定在 `payload.path` 内, 子目录扫描不覆盖整库清理清单. 待刮削目录自身不纳入清理目标, 整理与删除剪枝均保留该目录, 其内部空子目录仍按原规则清理.
+
 `RefreshPayload` 的 `scan` / `scrape` / `use_cache` 取值语义见 `handlers/models.py`; 落盘另交 ORGANIZE.
 
 扫描遍历经由 `scan_inventory` 的显式递归 (`@in_thread`, 一次分类为跳过 / 无效 / 媒体, 顺带产出清理清单与读错误计数), 与库内索引的差集在 Python 计算. 不允许将整棵树的路径放入 SQL `IN` / `NOT IN` — 按批拆分时 `NOT IN` 会把其它批里真实存在的文件误判为失效; 仅 `remove` 时对库内记录 `exists`, 不遍历磁盘树. fan-out 必须 `list_media_files(..., limit=None)`, 默认 50 是列表分页不是批量任务上限. `MediaFile.path` 的写入、按路径查找、有效 / 失效集合差一律 NFC, 从库内路径打开 / 判断存在 / 落盘必须经 `existing_disk_path`.

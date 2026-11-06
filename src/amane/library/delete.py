@@ -158,7 +158,9 @@ def ancestor_dirs(path: Path, *, library_root: Path) -> list[Path]:
 
 
 @in_thread
-def prune_empty_dirs(directories: Iterable[Path], *, library_root: Path) -> PruneResult:
+def prune_empty_dirs(
+    directories: Iterable[Path], *, library_root: Path, protected_dir: Path | None = None
+) -> PruneResult:
     """自底向上删除已经空的目录, 只尝试传入的目录, 不向库根扩展.
 
     只有 ``ENOTEMPTY`` 视为「非空」并跳过: 依赖目录删除对非空目录报错来保证确实为空,
@@ -170,6 +172,8 @@ def prune_empty_dirs(directories: Iterable[Path], *, library_root: Path) -> Prun
     candidates = sorted({Path(directory) for directory in directories}, key=_depth, reverse=True)
     for directory in candidates:
         if same_path(directory, library_root) or same_path(directory, trash_root):
+            continue
+        if protected_dir is not None and path_is_under(protected_dir, directory):
             continue
         if not path_is_under(directory, library_root):
             continue

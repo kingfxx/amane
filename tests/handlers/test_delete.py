@@ -71,6 +71,35 @@ async def test_delete_executes_inventory(repo: Repository, tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio(loop_scope="function")
+async def test_delete_preserves_configured_incoming_directory(repo: Repository, tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    incoming = root / "incoming"
+    (incoming / "empty").mkdir(parents=True)
+    library = await repo.create_library(name="t", path=str(root), scan_path=str(incoming))
+    assert library.id is not None
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, library.id)
+    inventory = store.get(inventory_id)
+    assert inventory is not None
+    assert {entry.path for entry in inventory.entries} == {incoming / "empty"}
+    result = await DeleteHandler(repo, store).handle(DeletePayload(library_id=library.id, inventory_id=inventory_id))
+    assert result.success and result.result is not None
+    assert result.result.deleted == 1
+    assert incoming.is_dir()
+    assert list(incoming.iterdir()) == []
+
+    # 执行时按当前配置保护目录, 即使清单生成时尚未配置待刮削路径.
+    await repo.update_library(library.id, scan_path=None)
+    stale_id = await _inventory_id(repo, store, library.id)
+    await repo.update_library(library.id, scan_path=str(incoming))
+    stale_result = await DeleteHandler(repo, store).handle(DeletePayload(library_id=library.id, inventory_id=stale_id))
+    assert stale_result.success and stale_result.result is not None
+    assert stale_result.result.deleted == 0
+    assert stale_result.result.excluded == 1
+    assert incoming.is_dir()
+
+
+@pytest.mark.asyncio(loop_scope="function")
 async def test_delete_missing_inventory_fails(repo: Repository, tmp_path: Path) -> None:
     lib_root = tmp_path / "lib"
     lib_root.mkdir()

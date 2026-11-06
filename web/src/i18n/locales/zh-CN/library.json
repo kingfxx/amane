@@ -108,6 +108,11 @@
   "emptyList": "未配置媒体库",
   "fieldName": "名称",
   "fieldPath": "路径",
+  "scanPath": {
+    "label": "待刮削路径",
+    "placeholder": "留空则扫描整个媒体库",
+    "hint": "扫描新文件时只扫描此目录并刮削其中待处理的文件. 支持库内绝对路径或相对于媒体库的子目录; 递归沿用媒体库设置."
+  },
   "placeholder": "/path/to/media/directory",
   "fieldRecursive": "递归",
   "fieldPatterns": "匹配模式",

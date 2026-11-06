@@ -7,7 +7,7 @@ import structlog
 from ..db import TaskType
 from ..library import MEDIA_EXTENSIONS, InventoryStore, LibraryHit, LibraryScan, OrphanScan, scan_inventory
 from ..parsing import parse_file_info
-from ..utils.path import nfc_path
+from ..utils.path import nfc_path, path_is_under
 from ..utils.threads import path_exists, path_is_dir
 from ._common import register_media_file
 from .models import RefreshPayload, RefreshResult, ScanMode, ScrapePayload
@@ -54,6 +54,7 @@ class RefreshHandler(TaskHandler[RefreshPayload, RefreshResult]):
         added = removed = scrape = subtitles = 0
 
         existing = await self._repo.list_media_files(library_id=payload.library_id, limit=None)
+        existing = [f for f in existing if path_is_under(f.path, scan_dir)]
         existing_by_path = {nfc_path(f.path): f for f in existing}
 
         if payload.scan:
@@ -77,6 +78,7 @@ class RefreshHandler(TaskHandler[RefreshPayload, RefreshResult]):
                     patterns=payload.patterns or [],
                     scan=scan,
                     collect_media=True,
+                    protected_dir=Path(library.scan_path) if library is not None and library.scan_path else None,
                     orphan_scan=(
                         OrphanScan.from_library(
                             library_root=library_root,
@@ -134,6 +136,8 @@ class RefreshHandler(TaskHandler[RefreshPayload, RefreshResult]):
         # 扇出 SCRAPE; 只描述后继, 由完成事务创建.
         followups = []
         for f in media_files:
+            if not path_is_under(f.path, scan_dir):
+                continue
             parsed = parse_file_info(f.path)
             assert f.id is not None
             assert parsed.number is not None

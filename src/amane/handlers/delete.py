@@ -26,7 +26,7 @@ from ..library import (
     same_path,
 )
 from ..library.cleanup.orphan import JunkKind, classify_junk
-from ..utils.path import is_name_surrogate, path_key
+from ..utils.path import is_name_surrogate, path_is_under, path_key
 from ..utils.threads import in_thread, path_is_dir
 from ._common import LibraryTaskLocks
 from .models import DeletePayload, DeleteResult
@@ -108,6 +108,7 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
             entry
             for entry in inventory.entries
             if not _is_excluded(entry.path, excluded=excluded_keys, included=included_keys)
+            and not (library.scan_path and path_is_under(library.scan_path, entry.path))
         ]
         excluded = len(inventory.entries) - len(targets)
         # 容器条目 (残留目录) 自身不是删除目标, 但它的子树要整体复验一次, 因此先记下路径.
@@ -151,7 +152,13 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
             for path in removed_paths:
                 candidates.update(ancestor_dirs(path, library_root=library_root))
             if candidates:
-                pruned = (await prune_empty_dirs(candidates, library_root=library_root)).removed
+                pruned = (
+                    await prune_empty_dirs(
+                        candidates,
+                        library_root=library_root,
+                        protected_dir=Path(library.scan_path) if library.scan_path else None,
+                    )
+                ).removed
         await self.report_progress(total, total, "done")
 
         logger.info(

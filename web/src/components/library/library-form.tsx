@@ -111,6 +111,7 @@ export interface LibraryFormState {
   auto_organize: boolean;
   ingest: LibraryIngest;
   cloud_path: string;
+  scan_path: string;
   scan: boolean;
 }
 
@@ -145,6 +146,7 @@ export function emptyLibraryForm(schema?: PathTemplateSchemaResponse | null): Li
     auto_organize: false,
     ingest: "native",
     cloud_path: "",
+    scan_path: "",
     scan: true,
   };
 }
@@ -177,6 +179,7 @@ export function libraryFormFromResponse(lib: LibraryResponse): LibraryFormState 
     auto_organize: lib.auto_organize,
     ingest: lib.ingest,
     cloud_path: lib.cloud_path ?? "",
+    scan_path: lib.scan_path ?? "",
     scan: false,
   };
 }
@@ -200,6 +203,7 @@ function libraryFormValues(form: LibraryFormState): Record<string, unknown> {
   return {
     name: form.name.trim(),
     path: form.path.trim(),
+    scan_path: form.scan_path.trim(),
     recursive: form.recursive,
     patterns: parseLibraryPatterns(form.patterns),
     move_mode: form.move_mode,
@@ -307,6 +311,19 @@ export function LibraryFormFields({ value, onChange, showCreateOnly }: LibraryFo
         onChange={(path) => onChange({ ...value, path })}
         pathType="directory"
       />
+      <Stack gap={4}>
+        <PathPicker
+          label={t("scanPath.label")}
+          placeholder={t("scanPath.placeholder")}
+          value={value.scan_path}
+          onChange={(scan_path) => onChange({ ...value, scan_path })}
+          initialPath={value.path}
+          pathType="directory"
+        />
+        <Text size="xs" c="dimmed">
+          {t("scanPath.hint")}
+        </Text>
+      </Stack>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
         <Input.Wrapper label={t("ingest.label")} description={t("ingest.hint")}>
           <div className={classes.ingestControl}>

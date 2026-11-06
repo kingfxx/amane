@@ -11344,6 +11344,17 @@
             "type": "string",
             "title": "Path"
           },
+          "scan_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Path"
+          },
           "automation": {
             "$ref": "#/components/schemas/LibraryAutomation",
             "default": "scrape"
@@ -11581,6 +11592,17 @@
             "type": "string",
             "title": "Path"
           },
+          "scan_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Path"
+          },
           "automation": {
             "$ref": "#/components/schemas/LibraryAutomation"
           },
@@ -11801,6 +11823,17 @@
               }
             ],
             "title": "Path"
+          },
+          "scan_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Path"
           },
           "automation": {
             "anyOf": [

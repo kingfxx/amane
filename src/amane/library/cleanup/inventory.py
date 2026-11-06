@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from ...utils.path import is_name_surrogate, path_key
+from ...utils.path import is_name_surrogate, path_is_under, path_key
 from ...utils.threads import in_thread
 from ..rules import TRASH_DIRNAME
 from ..scan import LibraryFileKind, LibraryHit, LibraryScan, UnwantedKind
@@ -221,6 +221,7 @@ class _ScanState:
     dirs: dict[Path, DirCoverage]
     limit: int
     collect_media: bool = False
+    protected_dir: Path | None = None
     media: list[LibraryHit] = field(default_factory=list)
     truncated: bool = False
     dropped: int = 0
@@ -302,6 +303,7 @@ def scan_inventory(
     source: InventorySource = InventorySource.RULES,
     limit: int = MAX_INVENTORY_ENTRIES,
     collect_media: bool = False,
+    protected_dir: Path | None = None,
     orphan_scan: OrphanScan | None = None,
     now: float | None = None,
 ) -> CleanupInventory:
@@ -325,6 +327,7 @@ def scan_inventory(
         dirs={},
         limit=limit,
         collect_media=collect_media,
+        protected_dir=protected_dir,
         orphan_scan=orphan_scan,
         now=now if now is not None else _utcnow().timestamp(),
         trailer_matcher=orphan_scan.trailer_matcher() if orphan_scan is not None else None,
@@ -582,6 +585,10 @@ def _record_dir(
     result = _walk(path, state=state, scan=scan, recursive=recursive, ancestor_has_media=ancestor_has_media)
     if result is None:
         return None
+    if state.protected_dir is not None and path_is_under(state.protected_dir, path):
+        result = replace(result, disappears=False, undeletable=True)
+        _record_coverage(path, result=result, state=state)
+        return result
     if result.children == 0:
         # 空目录先于残留判定: 它同样满足「子树里没有媒体且内容可解释」, 但它是一条空目录
         # 条目, 不是残留目录.

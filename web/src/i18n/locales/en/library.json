@@ -111,6 +111,11 @@
   "emptyList": "No library configured",
   "fieldName": "Name",
   "fieldPath": "Path",
+  "scanPath": {
+    "label": "Incoming path",
+    "placeholder": "Leave empty to scan the entire library",
+    "hint": "Scan for new files only in this directory and scrape pending files within it. Use an absolute path inside the library or a relative subdirectory; recursion follows the library setting."
+  },
   "placeholder": "/path/to/media/directory",
   "fieldRecursive": "Recursive",
   "fieldPatterns": "Patterns",
