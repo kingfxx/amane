@@ -8,6 +8,7 @@ does not receive the repository, task worker, or FastAPI application.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, ClassVar, Literal
@@ -19,7 +20,7 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 from ..net.connectivity import ConnectivityOutcome
 from ..net.errors import FailureReason, SourceError
 from ..parsing.file_info import ContentType, Mosaic
-from .import_models import ImportCandidate
+from .import_models import ImportCandidate, ImportContext, ImportProgress, PreparedImport
 from .models import PluginConfig, SourceDescriptor
 
 if TYPE_CHECKING:
@@ -381,6 +382,16 @@ class ImportProvider(ABC):
 
     @abstractmethod
     def read(self, path: Path) -> ImportCandidate: ...
+
+
+class SnapshotImportProvider(ImportProvider):
+    """导入契约 v2: 只向分配的缓存目录写入; 恢复不访问来源目录."""
+
+    @abstractmethod
+    def prepare(self, context: ImportContext, report: Callable[[ImportProgress], None]) -> PreparedImport: ...
+
+    @abstractmethod
+    def restore(self, context: ImportContext) -> PreparedImport: ...
 
 
 class ImportPlugin(_ConfiguredPlugin):

@@ -19,6 +19,7 @@ from .api import (
     PlaybackPlugin,
     PlaybackProvider,
     PluginContext,
+    SnapshotImportProvider,
 )
 from .models import (
     PluginConfig,
@@ -253,6 +254,8 @@ class PluginManager:
         provider = plugin.build_importer(self.validate_plugin_config(plugin_id, config))
         if not isinstance(provider, ImportProvider):
             raise TypeError("build_importer must return an ImportProvider")
+        if plugin.import_api_version == 2 and not isinstance(provider, SnapshotImportProvider):
+            raise TypeError("import API v2 requires a SnapshotImportProvider")
         return provider
 
     @staticmethod

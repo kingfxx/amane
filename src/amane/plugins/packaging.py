@@ -200,7 +200,7 @@ def _require_matching_capabilities(plugin: InstalledPlugin, descriptor: SourceDe
     is_playback = isinstance(plugin, PlaybackPlugin)
     has_import = descriptor.supports(SourceCapability.METADATA_IMPORT)
     is_import = isinstance(plugin, ImportPlugin)
-    if is_import and plugin.import_api_version != 1:
+    if is_import and plugin.import_api_version not in (1, 2):
         raise ValueError("unsupported import API version")
     if has_import != is_import:
         raise ValueError("metadata_import capability requires an ImportPlugin")
